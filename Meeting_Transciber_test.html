@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Meeting Transcriber</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --accent:#22c55e; --accent2:#38bdf8;
+    --text:#e2e8f0; --muted:#94a3b8; --danger:#ef4444; --border:#334155;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
+  body{margin:0; padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); height:100vh; height:100dvh; display:flex; flex-direction:column;}
+  header{padding:16px 24px; background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;}
+  header h1{margin:0; font-size:1.25rem;}
+  header h1 span{color:var(--accent);}
+  .status{font-size:0.85rem; color:var(--muted); display:flex; align-items:center; gap:6px;}
+  .dot{width:10px; height:10px; border-radius:50%; background:var(--muted); transition:.2s;}
+  .dot.live{background:var(--danger); box-shadow:0 0 8px var(--danger); animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%{opacity:1;}50%{opacity:.4;}100%{opacity:1;}}
+
+  .setup-banner{background:#0c2d48; border-bottom:1px solid var(--border); padding:12px 24px; font-size:0.85rem; color:#bae6fd; display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .setup-banner b{color:#7dd3fc;}
+
+  main{flex:1; display:flex; gap:0; padding:16px 24px; overflow:hidden; min-height:0;}
+  .col{background:var(--panel); border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; overflow:hidden;}
+  .transcript-col{flex:2; min-width:320px;}
+  .notes-col{flex:1; min-width:260px;}
+  .col-header{padding:12px 16px; border-bottom:1px solid var(--border); font-weight:600; display:flex; justify-content:space-between; align-items:center;}
+  .col-header small{color:var(--muted); font-weight:400;}
+
+  .speaker-bar{padding:10px 16px; border-bottom:1px solid var(--border); display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  .speaker-chip{display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:20px; cursor:pointer; border:2px solid var(--border); background:var(--bg); font-size:0.82rem; transition:.15s; user-select:none;}
+  .speaker-chip .swatch{width:10px; height:10px; border-radius:50%;}
+  .speaker-chip.active{border-color:var(--accent); box-shadow:0 0 0 2px rgba(34,197,94,0.25);}
+  .speaker-chip input{background:transparent; border:none; color:var(--text); font-size:0.82rem; width:80px; outline:none;}
+  .speaker-chip .remove{color:var(--muted); font-size:0.75rem; padding:0 2px;}
+  .speaker-chip .remove:hover{color:var(--danger);}
+  .add-speaker{background:transparent; border:1px dashed var(--border); color:var(--muted); border-radius:20px; padding:6px 12px; font-size:0.8rem; cursor:pointer;}
+  .add-speaker:hover{color:var(--text); border-color:var(--accent2);}
+
+  .auto-toggle{display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted); padding:0 16px 8px; flex-wrap:wrap;}
+  .auto-toggle input{accent-color:var(--accent); cursor:pointer;}
+  .auto-toggle select{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:2px 6px; font-size:0.78rem;}
+
+  #transcript{flex:1; overflow-y:auto; padding:16px; line-height:1.6; font-size:0.98rem; white-space:pre-wrap; outline:none;}
+  #transcript:empty::before{content:"Transcript will appear here once you hit Start...";color:var(--muted);}
+  .seg{margin-bottom:12px; display:flex; gap:8px; align-items:baseline;}
+  .seg .swatch{width:9px; height:9px; border-radius:50%; flex-shrink:0; margin-top:4px;}
+  .seg-body{flex:1;}
+  .speaker-name{font-weight:700; font-size:0.85rem; margin-right:6px;}
+  .ts{color:var(--muted); font-size:0.72rem; margin-right:6px; font-family:monospace;}
+  .interim{color:var(--muted); font-style:italic;}
+  .auto-flag{font-size:0.65rem; color:var(--muted); margin-left:6px;}
+
+  #notes{flex:1; resize:none; border:none; background:transparent; color:var(--text); padding:16px; font-size:0.95rem; outline:none; line-height:1.5;}
+
+  .controls{padding:12px 16px; border-top:1px solid var(--border); display:flex; gap:8px; flex-wrap:wrap;}
+  button{border:none; border-radius:8px; padding:10px 16px; font-size:0.9rem; font-weight:600; cursor:pointer; transition:transform .1s, opacity .1s; color:#0f172a;}
+  button:active{transform:scale(0.96);}
+  button:disabled{opacity:0.4; cursor:not-allowed;}
+  .btn-start{background:var(--accent);}
+  .btn-pause{background:#f59e0b;}
+  .btn-stop{background:var(--danger); color:#fff;}
+  .btn-secondary{background:var(--border); color:var(--text);}
+  .btn-secondary:hover{background:#475569;}
+  .btn-primary-modal{background:var(--accent);}
+  .btn-bridge{background:var(--accent2);}
+
+  footer{padding:8px 24px; font-size:0.75rem; color:var(--muted); text-align:center;}
+  input[type=text].title-input{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:6px 10px; font-size:0.85rem; width:140px;}
+  .meta-row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .banner{background:#3f2d0f; color:#facc15; padding:10px 24px; font-size:0.85rem; display:none;}
+  .hint{font-size:0.72rem; color:var(--muted); padding:0 16px 8px;}
+  kbd{background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:1px 5px; font-size:0.7rem;}
+  .vol-meter{height:6px; background:var(--bg); border-radius:4px; overflow:hidden; margin:0 16px 10px; border:1px solid var(--border);}
+  .vol-fill{height:100%; width:0%; background:linear-gradient(90deg,var(--accent),var(--accent2)); transition:width .08s;}
+
+
+  /* Resizable splitter between Transcript and Notes */
+  .splitter{flex:0 0 16px; display:flex; align-items:center; justify-content:center; cursor:col-resize; touch-action:none; user-select:none; border-radius:8px; outline:none;}
+  .splitter::before{content:""; width:4px; height:56px; border-radius:2px; background:var(--border); transition:background .15s, height .15s;}
+  .splitter:hover::before, .splitter:focus-visible::before, .splitter.dragging::before{background:var(--accent2); height:80px;}
+  .splitter:focus-visible{box-shadow:0 0 0 2px rgba(56,189,248,0.35);}
+  body.resizing{cursor:col-resize; user-select:none;}
+  body.resizing.stacked-drag{cursor:row-resize;}
+  body.resizing #transcript, body.resizing #notes{pointer-events:none;}
+
+  .mic-pill{font-size:0.85rem; color:var(--muted); display:flex; align-items:center; gap:6px; padding:3px 10px; border:1px solid var(--border); border-radius:20px; background:var(--bg);}
+  .mic-pill.granted{color:var(--accent); border-color:rgba(34,197,94,0.5);}
+  .mic-pill.denied{color:var(--danger); border-color:rgba(239,68,68,0.5);}
+  .banner .banner-close{float:right; cursor:pointer; margin-left:12px; opacity:.8;}
+  .banner .banner-close:hover{opacity:1;}
+  .keep-open{margin-left:auto; display:flex; align-items:center; gap:6px;}
+
+  button{touch-action:manipulation;}
+  #transcript{overflow-wrap:anywhere; -webkit-overflow-scrolling:touch;}
+
+  /* Touch devices: bigger drag handle and tap targets */
+  @media (pointer:coarse){
+    .splitter{flex-basis:28px;}
+    .speaker-chip{padding:8px 12px;}
+    .speaker-chip .remove{padding:6px 8px; font-size:0.9rem;}
+    .add-speaker{padding:8px 14px;}
+  }
+
+  /* ---------- Mobile / narrow screens: one scrolling page, panels stacked ---------- */
+  @media (max-width:820px){
+    body{height:auto; min-height:100vh; min-height:100dvh;}
+    header{padding:10px 14px; gap:8px;}
+    header h1{font-size:1.1rem;}
+    .meta-row{width:100%; gap:6px;}
+    input[type=text].title-input{flex:1 1 140px; width:auto; min-width:0;}
+    .mic-pill, .status{font-size:0.8rem;}
+    .setup-banner{display:block; padding:8px 14px; font-size:0.78rem; line-height:1.4;}
+    .banner{padding:8px 14px; font-size:0.78rem;}
+
+    main{flex:none; flex-direction:column; overflow:visible; padding:12px; min-height:0;}
+    .transcript-col{flex:0 0 auto; height:min(75vh,680px); height:min(75dvh,680px); min-width:0; min-height:220px;}
+    .notes-col{flex:1 0 auto; min-width:0; min-height:340px;}
+    #transcript{min-height:110px; padding:12px; font-size:1rem;}
+    #notes{min-height:160px;}
+    .splitter{flex:0 0 24px; cursor:row-resize;}
+    .splitter::before{width:56px; height:4px;}
+    .splitter:hover::before, .splitter:focus-visible::before, .splitter.dragging::before{width:80px; height:4px;}
+    body.resizing{cursor:row-resize;}
+
+    .col-header{padding:10px 14px;}
+    .speaker-bar{padding:8px 12px; gap:6px;}
+    .auto-toggle{padding:0 12px 8px; font-size:0.78rem; line-height:1.5;}
+    .auto-toggle > span{display:none;}
+    .keep-open{margin-left:0; width:100%;}
+    .vol-meter{margin:0 12px 8px;}
+
+    /* Comfortable buttons: two per row, finger-sized */
+    .controls{padding:10px 12px; gap:8px;}
+    .controls button{flex:1 1 calc(50% - 8px); min-height:44px; padding:10px 12px;}
+    .controls .btn-stop{flex-basis:100%;}
+    .bridge-note{padding:0 12px 10px;}
+
+    /* 16px inputs stop iOS from zooming in on focus */
+    input[type=text], .speaker-chip input, .auto-toggle select, #notes{font-size:16px;}
+    .speaker-chip input{width:90px;}
+
+    footer{padding:10px 14px 16px; font-size:0.68rem; line-height:1.4;}
+
+    .modal-overlay{align-items:flex-end;}
+    .modal{width:100%; max-width:100%; max-height:90vh; max-height:90dvh; padding:16px; border-radius:16px 16px 0 0;}
+    #disclaimerModal .modal{max-width:100%;}
+    .modal .btn-secondary, .modal .btn-bridge, .modal .btn-primary-modal{min-height:44px;}
+    .toast{left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom,0px)); max-width:none;}
+  }
+
+  /* Modals */
+  .modal-overlay{position:fixed; inset:0; background:rgba(0,0,0,0.7); display:none; align-items:center; justify-content:center; z-index:100;}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--panel); border:1px solid var(--border); border-radius:12px; max-width:640px; width:90%; max-height:85vh; overflow-y:auto; padding:24px;}
+  .modal h2{margin-top:0; color:var(--accent);}
+  .modal h3{color:var(--accent2); font-size:0.95rem; margin-top:20px;}
+  .modal ul{padding-left:20px; line-height:1.6;}
+  .modal .close-modal{float:right; cursor:pointer; color:var(--muted); font-size:1.2rem;}
+  .modal .close-modal:hover{color:var(--text);}
+  .tag{display:inline-block; background:var(--bg); border:1px solid var(--border); border-radius:6px; padding:2px 8px; font-size:0.75rem; margin-right:6px; color:var(--muted);}
+
+  /* Disclaimer modal specifics */
+  #disclaimerModal .modal{max-width:560px; border:1px solid var(--accent2);}
+  #disclaimerModal h2{color:#facc15;}
+  #disclaimerModal ul{color:var(--text); font-size:0.9rem;}
+  #disclaimerModal p{font-size:0.9rem; line-height:1.6;}
+  .disclaimer-check{display:flex; align-items:flex-start; gap:8px; margin-top:16px; font-size:0.85rem; color:var(--muted);}
+  .disclaimer-check input{margin-top:3px; accent-color:var(--accent); cursor:pointer;}
+  body.locked main, body.locked header, body.locked .setup-banner{filter:blur(3px); pointer-events:none; user-select:none;}
+  .bridge-note{font-size:0.72rem; color:var(--muted); padding:0 16px 10px;}
+  .toast{
+    position:fixed; bottom:20px; right:20px; background:var(--accent); color:#0f172a; padding:12px 18px; border-radius:8px;
+    font-size:0.85rem; font-weight:600; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:200; display:none; max-width:320px;
+  }
+  .toast.show{display:block;}
+</style>
+</head>
+<body>
+
+<!-- ============ DISCLAIMER MODAL (shown on every launch) ============ -->
+<div class="modal-overlay show" id="disclaimerModal">
+  <div class="modal">
+    <h2>⚠️ Before You Start</h2>
+    <p><b>This tool itself does not record, save or transmit any audio.</b> Transcription is performed by your browser's built-in speech recognition. In Chrome/Edge, that means your browser sends audio to the browser vendor's cloud speech service to generate text in real time — this is a function of the browser, not of this app. This app never stores, uploads, or has access to that audio or any recording of it.</p>
+    <ul>
+      <li>Transcripts are <b>not verbatim legal records</b> and may contain errors — they should <b>not be used to quote, attribute statements to, or hold any individual accountable</b> for exact wording.</li>
+      <li>Speaker labeling is manual/approximate, not verified voice identification — do not treat speaker attribution as definitive.</li>
+      <li>This is an <b>internal, unofficial productivity aid</b> — it is not a sanctioned system of record and must <b>not be shared externally</b> or used as evidence in any formal, legal, HR, or compliance context.</li>
+      <li>All transcript and notes data is cleared automatically when you refresh or close this page — nothing persists between sessions.</li>
+      <li>The "Send to Meeting Summarizer" button opens a MatchaOS mission in a new tab and copies your <b>transcript only</b> (not your notes) to your clipboard for you to paste in manually — it does not transmit data automatically.</li>
+      <li>Ensure all meeting participants are aware that notes are being taken, per your organization's meeting and recording policies.</li>
+    </ul>
+    <div class="disclaimer-check">
+      <input type="checkbox" id="ackCheckbox">
+      <label for="ackCheckbox">I understand and acknowledge this is an unofficial internal note-taking aid, not a verified recording or quoting tool, and I will not use it for external distribution or as an official record.</label>
+    </div>
+    <div style="margin-top:18px;">
+      <button class="btn-primary-modal" id="ackBtn" disabled>Acknowledge & Continue</button>
+    </div>
+  </div>
+</div>
+
+<header>
+  <h1>🎧 Meeting <span>Transcriber</span></h1>
+  <div class="meta-row">
+    <input type="text" class="title-input" id="meetingTitle" placeholder="Meeting title...">
+    <div class="mic-pill" id="micPill" title="Browser microphone permission for this page">🎙 <span id="micPillText">Mic: not requested yet</span></div>
+    <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Idle</span></div>
+  </div>
+</header>
+
+<div class="setup-banner">
+  🔊 <b>Setup:</b> Join meetings normally, play meeting audio through your <b>speakers</b> (not headphones) so your mic can pick it up. Keep volume clear, not too loud/quiet. Then hit Start. Your browser asks for microphone access <b>once</b> &mdash; choose <b>Allow</b>.
+</div>
+
+<div class="banner" id="browserBanner">⚠️ Live transcription needs Chrome or Edge with microphone access. Typing/notes still work everywhere.</div>
+<div class="banner" id="originBanner"><span class="banner-close" id="originBannerClose" title="Dismiss">✕</span>🔒 <b>Why the microphone prompt keeps returning:</b> this page is open as a local file (or an insecure address). Chrome and Edge only remember "Allow" for <b>https://</b> pages or <b>localhost</b>. Host this file on an HTTPS site (e.g. GitHub Pages or your intranet) and choose Allow once &mdash; the browser will remember it.</div>
+
+<main id="mainArea">
+  <div class="col transcript-col" id="transcriptCol">
+    <div class="col-header">
+      Transcript <small id="wordCount">0 words</small>
+    </div>
+    <div class="speaker-bar" id="speakerBar"></div>
+    <div class="auto-toggle">
+      <input type="checkbox" id="autoSwitch" checked>
+      <label for="autoSwitch">Auto-switch speaker after pause of</label>
+      <select id="pauseThreshold">
+        <option value="1000">1.0s</option>
+        <option value="1500" selected>1.5s</option>
+        <option value="2000">2.0s</option>
+        <option value="3000">3.0s</option>
+      </select>
+      <span style="color:var(--muted)">— heuristic guess, not true voice ID. Override anytime with chips/keys 1-9.</span>
+      <label class="keep-open" title="Keeps the mic connection open while paused so the browser doesn't need to ask again. Turn off if you want the mic fully released on Pause.">
+        <input type="checkbox" id="keepMicOpen" checked> Keep mic open while paused
+      </label>
+    </div>
+    <div class="vol-meter"><div class="vol-fill" id="volFill"></div></div>
+    <div id="transcript" contenteditable="true"></div>
+    <div class="controls">
+      <button class="btn-start" id="startBtn">▶ Start</button>
+      <button class="btn-pause" id="pauseBtn" disabled>⏸ Pause</button>
+      <button class="btn-stop" id="stopBtn" disabled>⏹ Stop & Summarize</button>
+      <button class="btn-secondary" id="clearBtn">🗑 Clear</button>
+      <button class="btn-secondary" id="copyBtn">📋 Copy</button>
+      <button class="btn-secondary" id="exportBtn">⬇ Export .txt</button>
+    </div>
+  </div>
+
+  <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" aria-label="Resize transcript and notes panels" aria-valuemin="20" aria-valuemax="80" aria-valuenow="66" tabindex="0" title="Drag to resize &middot; double-click to reset &middot; arrow keys also work"></div>
+
+  <div class="col notes-col" id="notesCol">
+    <div class="col-header">Notes & Action Items <small>cleared on refresh/close</small></div>
+    <textarea id="notes" placeholder="Jot key decisions, action items, follow-ups here...
+
+e.g.
+- [ ] Sarah to send proposal by Friday
+- Decision: launch delayed to Q4
+
+Note: this content is NOT saved between sessions. Export before closing!"></textarea>
+    <div class="controls">
+      <button class="btn-secondary" id="summarizeBtn">🧠 Generate Summary Now</button>
+      <button class="btn-bridge" id="sendToMatchaBtn">🚀 Send to Meeting Summarizer</button>
+      <button class="btn-secondary" id="exportAllBtn">⬇ Export Full Report</button>
+    </div>
+    <div class="bridge-note">"Send to Meeting Summarizer" copies the <b>transcript only</b> to your clipboard and opens the MatchaOS mission in a new tab — paste it in manually once it loads.</div>
+  </div>
+</main>
+
+<footer>Runs 100% locally in your browser — no audio is stored, no data leaves your machine, and nothing persists after refresh/close. Speaker auto-switching is pause-based (not true voice ID). Summary is keyword-based, not AI-generated. Internal use only — do not use for external distribution or as an official record.</footer>
+
+<!-- Summary Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <span class="close-modal" id="closeModal">✕</span>
+    <h2>📋 Meeting Summary</h2>
+    <div id="summaryContent"></div>
+    <div style="margin-top:20px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn-secondary" id="insertToNotes">📥 Insert into Notes</button>
+      <button class="btn-bridge" id="sendToMatchaBtnModal">🚀 Send to Meeting Summarizer</button>
+      <button class="btn-secondary" id="closeModalBtn">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ============ FRESH START ON EVERY LOAD ============
+  try {
+    localStorage.removeItem('teams_meeting_notes');
+    localStorage.removeItem('teams_meeting_speakers');
+  } catch(e) {}
+
+  const transcriptEl = document.getElementById('transcript');
+  const notesEl = document.getElementById('notes');
+  const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const stopBtn = document.getElementById('stopBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const exportAllBtn = document.getElementById('exportAllBtn');
+  const summarizeBtn = document.getElementById('summarizeBtn');
+  const sendToMatchaBtn = document.getElementById('sendToMatchaBtn');
+  const sendToMatchaBtnModal = document.getElementById('sendToMatchaBtnModal');
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const wordCount = document.getElementById('wordCount');
+  const meetingTitle = document.getElementById('meetingTitle');
+  const browserBanner = document.getElementById('browserBanner');
+  const speakerBar = document.getElementById('speakerBar');
+  const volFill = document.getElementById('volFill');
+  const autoSwitch = document.getElementById('autoSwitch');
+  const pauseThreshold = document.getElementById('pauseThreshold');
+  const modalOverlay = document.getElementById('modalOverlay');
+  const summaryContent = document.getElementById('summaryContent');
+  const disclaimerModal = document.getElementById('disclaimerModal');
+  const ackCheckbox = document.getElementById('ackCheckbox');
+  const ackBtn = document.getElementById('ackBtn');
+  const toast = document.getElementById('toast');
+
+  const MATCHA_MISSION_URL = 'https://matcha.harriscomputer.com/chatbot?mission_id=4010&mission_name=Summary-Style+Meeting+Notes&client_id=4099&vendor_id=1&ms=Meeting';
+
+  // ============ DISCLAIMER GATE ============
+  document.body.classList.add('locked');
+  ackCheckbox.addEventListener('change', () => {
+    ackBtn.disabled = !ackCheckbox.checked;
+  });
+  ackBtn.addEventListener('click', () => {
+    disclaimerModal.classList.remove('show');
+    document.body.classList.remove('locked');
+  });
+
+  // ---- Speakers (fresh defaults every load — not persisted) ----
+  const COLORS = ['#22c55e','#38bdf8','#f472b6','#f59e0b','#a78bfa','#f87171','#34d399','#60a5fa','#fbbf24'];
+  let speakers = [
+    {id:1, name:'Speaker 1', color: COLORS[0]},
+    {id:2, name:'Speaker 2', color: COLORS[1]}
+  ];
+  let activeSpeakerId = speakers[0].id;
+  let nextId = 3;
+  let lastResultTime = Date.now();
+  let autoAdvanceFlag = false;
+
+  function renderSpeakerBar(){
+    speakerBar.innerHTML = '';
+    speakers.forEach((sp) => {
+      const chip = document.createElement('div');
+      chip.className = 'speaker-chip' + (sp.id === activeSpeakerId ? ' active' : '');
+      chip.innerHTML = `
+        <span class="swatch" style="background:${sp.color}"></span>
+        <input type="text" value="${escapeAttr(sp.name)}" data-id="${sp.id}" size="${Math.max(sp.name.length,6)}">
+        <span class="remove" data-id="${sp.id}" title="Remove speaker">✕</span>
+      `;
+      chip.addEventListener('click', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.classList.contains('remove')) return;
+        activeSpeakerId = sp.id;
+        renderSpeakerBar();
+      });
+      const input = chip.querySelector('input');
+      input.addEventListener('click', e => e.stopPropagation());
+      input.addEventListener('change', e => {
+        sp.name = e.target.value.trim() || sp.name;
+        renderSpeakerBar();
+      });
+      const removeBtn = chip.querySelector('.remove');
+      removeBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (speakers.length <= 1) { alert('Keep at least one speaker.'); return; }
+        speakers = speakers.filter(s => s.id !== sp.id);
+        if (activeSpeakerId === sp.id) activeSpeakerId = speakers[0].id;
+        renderSpeakerBar();
+      });
+      speakerBar.appendChild(chip);
+    });
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-speaker';
+    addBtn.textContent = '+ Add speaker';
+    addBtn.addEventListener('click', () => {
+      const color = COLORS[speakers.length % COLORS.length];
+      const sp = {id: nextId++, name: 'Speaker ' + (speakers.length+1), color};
+      speakers.push(sp);
+      activeSpeakerId = sp.id;
+      renderSpeakerBar();
+    });
+    speakerBar.appendChild(addBtn);
+  }
+  renderSpeakerBar();
+
+  function escapeAttr(str){ return str.replace(/"/g,'&quot;'); }
+
+  document.addEventListener('keydown', (e) => {
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.id === 'transcript') return;
+    const n = parseInt(e.key, 10);
+    if (n && speakers[n-1]) {
+      activeSpeakerId = speakers[n-1].id;
+      renderSpeakerBar();
+    }
+  });
+
+  function advanceSpeaker(){
+    const idx = speakers.findIndex(s => s.id === activeSpeakerId);
+    const next = speakers[(idx + 1) % speakers.length];
+    activeSpeakerId = next.id;
+    renderSpeakerBar();
+    autoAdvanceFlag = true;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let listening = false;
+  let paused = false;
+  let interimSpan = null;
+
+  // ============ MICROPHONE: ask ONCE, then reuse ============
+  // One getUserMedia() call per session. The stream is reused for the volume meter and kept
+  // open across Pause/Resume and automatic recognition restarts, so the browser is never asked twice.
+  // (Previously the app called getUserMedia AND recognition.start() separately, and re-called
+  //  recognition.start() every time Chrome ended a session - each could trigger its own prompt.)
+  const micPill = document.getElementById('micPill');
+  const micPillText = document.getElementById('micPillText');
+  const keepMicOpen = document.getElementById('keepMicOpen');
+  const originBanner = document.getElementById('originBanner');
+
+  let audioCtx = null, analyser = null, micStream = null, micRequest = null, rafId = null;
+
+  function setMicPill(state) {
+    micPill.classList.toggle('granted', state === 'granted');
+    micPill.classList.toggle('denied', state === 'denied');
+    micPillText.textContent =
+      state === 'granted' ? 'Mic: allowed' :
+      state === 'denied'  ? 'Mic: blocked' :
+      state === 'live'    ? 'Mic: live' :
+                            'Mic: will ask once';
+  }
+
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({name:'microphone'}).then(p => {
+      const sync = () => setMicPill(micStream ? 'live' : p.state);
+      sync();
+      p.onchange = sync;
+    }).catch(() => {});
+  }
+
+  // Warn when the origin can't persist permission (file:// or plain http)
+  if (location.protocol === 'file:' || !window.isSecureContext) {
+    originBanner.style.display = 'block';
+  }
+  document.getElementById('originBannerClose').addEventListener('click', () => { originBanner.style.display = 'none'; });
+
+  function micIsLive() {
+    return !!micStream && micStream.getAudioTracks().some(t => t.readyState === 'live');
+  }
+
+  function ensureMic() {
+    if (micIsLive()) return Promise.resolve(micStream);
+    if (micRequest) return micRequest;                       // never fire two prompts at once
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      return Promise.reject(new Error('getUserMedia unavailable'));
+    }
+    micRequest = navigator.mediaDevices.getUserMedia({audio:true}).then(stream => {
+      micStream = stream;
+      stream.getAudioTracks().forEach(t => t.addEventListener('ended', () => {
+        if (micStream === stream) { micStream = null; stopMeter(); setMicPill('granted'); }
+      }));
+      setMicPill('live');
+      return stream;
+    }).finally(() => { micRequest = null; });
+    return micRequest;
+  }
+
+  function releaseMic() {
+    stopMeter();
+    if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
+    if (!micPill.classList.contains('denied')) setMicPill('granted');
+  }
+
+  function startMeter(stream) {
+    stopMeter();
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const source = audioCtx.createMediaStreamSource(stream);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      const tick = () => {
+        if (!analyser) return;
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a,b)=>a+b,0)/data.length;
+        volFill.style.width = Math.min(100, avg*1.6) + '%';
+        rafId = requestAnimationFrame(tick);
+      };
+      tick();
+    } catch(e) { console.warn('Volume meter unavailable:', e); }
+  }
+
+  function stopMeter() {
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = null; analyser = null;
+    if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
+    volFill.style.width = '0%';
+  }
+
+  function explainMicError(err) {
+    const name = err && err.name;
+    if (name === 'NotAllowedError' || name === 'SecurityError' || name === 'PermissionDeniedError') {
+      setMicPill('denied');
+      setStatus('Mic access blocked', false);
+      showToast('🚫 Microphone is blocked. Click the 🔒 icon in the address bar → Microphone → Allow, then press Start again.', 8000);
+    } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+      setStatus('No microphone found', false);
+      showToast('⚠️ No microphone was found. Plug one in or check your system sound settings.', 6000);
+    } else {
+      setStatus('Mic unavailable', false);
+      showToast('⚠️ Could not access the microphone: ' + ((err && err.message) || 'unknown error'), 6000);
+    }
+  }
+
+  let networkErrors = 0;
+
+  // Start recognition, tolerating the brief window where a previous session is still closing
+  let startRetries = 0;
+  function safeStart() {
+    if (!recognition || !listening || paused) return;
+    try {
+      recognition.start();
+      startRetries = 0;
+    } catch (e) {
+      if (e && e.name === 'InvalidStateError' && startRetries < 5) {
+        startRetries++;
+        setTimeout(safeStart, 300);
+      } else {
+        console.warn('Could not start recognition:', e);
+      }
+    }
+  }
+
+  if (!SpeechRecognition) {
+    browserBanner.style.display = 'block';
+    startBtn.disabled = true;
+  } else {
+    recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      if (listening && !paused && networkErrors === 0) setStatus('Listening...', true);
+    };
+
+    recognition.onresult = (e) => {
+      if (networkErrors > 0) { networkErrors = 0; setStatus('Listening...', true); }
+      const now = Date.now();
+      const gap = now - lastResultTime;
+      if (autoSwitch.checked && gap > parseInt(pauseThreshold.value, 10) && transcriptEl.childElementCount > 0) {
+        advanceSpeaker();
+      }
+      lastResultTime = now;
+
+      let finalText = '';
+      let interimText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const res = e.results[i];
+        if (res.isFinal) finalText += res[0].transcript;
+        else interimText += res[0].transcript;
+      }
+      if (finalText.trim()) { addSegment(finalText.trim(), autoAdvanceFlag); autoAdvanceFlag = false; }
+      updateInterim(interimText);
+      updateWordCount();
+    };
+
+    recognition.onerror = (e) => {
+      console.warn('Speech recognition error:', e.error);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        listening = false;
+        releaseMic();
+        setMicPill('denied');
+        setStatus('Mic access denied', false);
+        showToast('🚫 Microphone is blocked. Click the 🔒 icon in the address bar → Microphone → Allow, then press Start again.', 8000);
+        resetButtons();
+      } else if (e.error === 'audio-capture') {
+        listening = false;
+        releaseMic();
+        setStatus('No microphone found', false);
+        resetButtons();
+      } else if (e.error === 'network') {
+        networkErrors++;
+        if (networkErrors >= 3) {
+          // Give up instead of looping forever: the browser's speech service can't be reached
+          listening = false; paused = false;
+          try { recognition.abort(); } catch(err) {}
+          releaseMic();
+          updateInterim('');
+          resetButtons();
+          networkErrors = 0;
+          setStatus('Speech service unreachable', false);
+          showToast('🌐 Your browser can\'t reach its speech-recognition service (Chrome uses Google\'s, Edge uses Microsoft\'s). A firewall, proxy or VPN is the usual cause - try another network or turn the VPN off, then press Start. Not a microphone problem.', 12000);
+        } else {
+          setStatus('Network issue - retrying (' + networkErrors + '/3)...', true);
+        }
+      }
+      // 'no-speech' and 'aborted' are normal; onend restarts the session quietly.
+    };
+
+    recognition.onend = () => {
+      if (listening && !paused) setTimeout(safeStart, networkErrors ? 1000 * networkErrors : 250);
+    };
+  }
+
+  function timestamp() {
+    const now = new Date();
+    return now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  }
+
+  function currentSpeaker(){
+    return speakers.find(s => s.id === activeSpeakerId) || speakers[0];
+  }
+
+  function addSegment(text, wasAuto) {
+    if (interimSpan) { interimSpan.remove(); interimSpan = null; }
+    const sp = currentSpeaker();
+    const seg = document.createElement('div');
+    seg.className = 'seg';
+    seg.dataset.speakerId = sp.id;
+    seg.dataset.text = text;
+    seg.innerHTML = `
+      <span class="swatch" style="background:${sp.color}"></span>
+      <span class="seg-body"><span class="speaker-name" style="color:${sp.color}">${escapeHtml(sp.name)}</span><span class="ts">${timestamp()}</span>${escapeHtml(text)}${wasAuto ? '<span class="auto-flag">(auto)</span>' : ''}</span>
+    `;
+    transcriptEl.appendChild(seg);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  function updateInterim(text) {
+    if (interimSpan) interimSpan.remove();
+    if (!text.trim()) { interimSpan = null; return; }
+    const sp = currentSpeaker();
+    interimSpan = document.createElement('div');
+    interimSpan.className = 'seg interim';
+    interimSpan.innerHTML = `<span class="swatch" style="background:${sp.color}"></span><span class="seg-body">${escapeHtml(text)}</span>`;
+    transcriptEl.appendChild(interimSpan);
+    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function updateWordCount() {
+    const words = transcriptEl.innerText.trim().split(/\s+/).filter(Boolean).length;
+    wordCount.textContent = words + ' words';
+  }
+
+  function setStatus(text, isLive) {
+    statusText.textContent = text;
+    statusDot.classList.toggle('live', !!isLive);
+  }
+
+  function resetButtons() {
+    listening = false; paused = false;
+    startBtn.disabled = false; pauseBtn.disabled = true; stopBtn.disabled = true;
+    pauseBtn.textContent = '⏸ Pause';
+  }
+
+  startBtn.addEventListener('click', async () => {
+    if (!recognition) return;
+    startBtn.disabled = true;
+    setStatus('Waiting for microphone...', false);
+    try {
+      const stream = await ensureMic();          // the ONE permission request
+      startMeter(stream);
+    } catch (err) {
+      explainMicError(err);
+      startBtn.disabled = false;
+      return;
+    }
+    lastResultTime = Date.now();
+    networkErrors = 0;
+    listening = true; paused = false;
+    pauseBtn.disabled = false; stopBtn.disabled = false;
+    setStatus('Listening...', true);
+    safeStart();
+  });
+
+  pauseBtn.addEventListener('click', async () => {
+    if (!recognition) return;
+    if (!paused) {
+      paused = true;
+      recognition.stop();
+      if (!keepMicOpen.checked) releaseMic();
+      pauseBtn.textContent = '▶ Resume';
+      setStatus(keepMicOpen.checked ? 'Paused (mic held open)' : 'Paused', false);
+    } else {
+      pauseBtn.disabled = true;
+      try {
+        const stream = await ensureMic();        // no prompt if the stream was kept open
+        startMeter(stream);
+      } catch (err) {
+        explainMicError(err);
+        pauseBtn.disabled = false;
+        return;
+      }
+      pauseBtn.disabled = false;
+      paused = false;
+      lastResultTime = Date.now();
+      pauseBtn.textContent = '⏸ Pause';
+      setStatus('Listening...', true);
+      safeStart();
+    }
+  });
+
+  stopBtn.addEventListener('click', () => {
+    if (!recognition) return;
+    listening = false; paused = false;
+    recognition.stop();
+    releaseMic();                                 // mic is always released on Stop
+    updateInterim('');
+    resetButtons();
+    setStatus('Stopped', false);
+    generateSummary();
+  });
+
+  clearBtn.addEventListener('click', () => {
+    if (confirm('Clear the entire transcript?')) {
+      transcriptEl.innerHTML = '';
+      updateWordCount();
+    }
+  });
+
+  copyBtn.addEventListener('click', () => {
+    const text = transcriptEl.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      copyBtn.textContent = '✅ Copied!';
+      setTimeout(() => copyBtn.textContent = '📋 Copy', 1500);
+    });
+  });
+
+  function download(filename, text) {
+    const blob = new Blob([text], {type: 'text/plain'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  exportBtn.addEventListener('click', () => {
+    const title = meetingTitle.value.trim() || 'Meeting Transcript';
+    const text = transcriptEl.innerText;
+    download(sanitizeFilename(title) + '.txt', text);
+  });
+
+  exportAllBtn.addEventListener('click', () => {
+    const title = meetingTitle.value.trim() || 'Meeting Notes';
+    const date = new Date().toLocaleString();
+    const report = `${title}
+Date: ${date}
+
+=== TRANSCRIPT ===
+${transcriptEl.innerText}
+
+=== NOTES & ACTION ITEMS ===
+${notesEl.value}
+`;
+    download(sanitizeFilename(title) + '_full-report.txt', report);
+  });
+
+  function sanitizeFilename(name) {
+    return name.replace(/[^a-z0-9\- _]/gi, '').trim().replace(/\s+/g, '_') || 'meeting';
+  }
+
+  // ---- Send to Meeting Summarizer (transcript ONLY to clipboard) ----
+  let toastTimer = null;
+  function showToast(msg, ms = 3500) {
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('show'), ms);
+  }
+
+  function sendToMatcha() {
+    const transcriptText = transcriptEl.innerText.trim();
+    if (!transcriptText) {
+      showToast('⚠️ No transcript to send yet.');
+      return;
+    }
+    navigator.clipboard.writeText(transcriptText).then(() => {
+      window.open(MATCHA_MISSION_URL, '_blank');
+      showToast('✅ Transcript copied to clipboard. Paste it into the Meeting Summarizer tab that just opened.');
+    }).catch(() => {
+      window.open(MATCHA_MISSION_URL, '_blank');
+      showToast('⚠️ Could not copy automatically — please copy the transcript manually.');
+    });
+  }
+
+  sendToMatchaBtn.addEventListener('click', sendToMatcha);
+  sendToMatchaBtnModal.addEventListener('click', sendToMatcha);
+
+  // ---- Extractive Summary Engine (keyword/heuristic based, runs locally) ----
+  const ACTION_KEYWORDS = ['will ', 'need to', 'action', 'todo', 'to-do', 'follow up', 'follow-up', 'by friday', 'by monday', 'by tuesday', 'by wednesday', 'by thursday', 'by next week', 'due ', 'deadline', 'assign', 'responsible', 'i\'ll ', 'we\'ll ', 'let\'s ', 'should ', 'must '];
+  const DECISION_KEYWORDS = ['decided', 'decision', 'agreed', 'we will go with', 'conclusion', 'finalized', 'approved', 'confirmed'];
+
+  function generateSummary() {
+    const segs = Array.from(transcriptEl.querySelectorAll('.seg:not(.interim)'));
+    if (segs.length === 0) {
+      summaryContent.innerHTML = '<p style="color:var(--muted)">No transcript content to summarize.</p>';
+      showModal();
+      return;
+    }
+
+    const bySpeaker = {};
+    const actionItems = [];
+    const decisions = [];
+    let allSentences = [];
+
+    segs.forEach(seg => {
+      const spId = seg.dataset.speakerId;
+      const sp = speakers.find(s => s.id == spId);
+      const name = sp ? sp.name : 'Unknown';
+      const text = seg.dataset.text || '';
+      bySpeaker[name] = (bySpeaker[name] || 0) + text.split(/\s+/).filter(Boolean).length;
+
+      const lower = text.toLowerCase();
+      if (ACTION_KEYWORDS.some(k => lower.includes(k))) {
+        actionItems.push({name, text});
+      }
+      if (DECISION_KEYWORDS.some(k => lower.includes(k))) {
+        decisions.push({name, text});
+      }
+      allSentences.push({name, text});
+    });
+
+    const talkRanking = Object.entries(bySpeaker).sort((a,b) => b[1]-a[1]);
+    const totalWords = talkRanking.reduce((sum,[,w]) => sum+w, 0) || 1;
+
+    const keyPoints = allSentences
+      .filter(s => s.text.split(/\s+/).length > 8)
+      .sort((a,b) => b.text.length - a.text.length)
+      .slice(0, 6);
+
+    let html = '';
+    html += `<h3>🗣️ Talk-Time Breakdown</h3><ul>`;
+    talkRanking.forEach(([name, words]) => {
+      const pct = Math.round((words/totalWords)*100);
+      html += `<li><b>${escapeHtml(name)}</b>: ${words} words (${pct}%)</li>`;
+    });
+    html += `</ul>`;
+
+    html += `<h3>💡 Key Points</h3>`;
+    if (keyPoints.length) {
+      html += '<ul>' + keyPoints.map(p => `<li><span class="tag">${escapeHtml(p.name)}</span>${escapeHtml(p.text)}</li>`).join('') + '</ul>';
+    } else {
+      html += '<p style="color:var(--muted)">No standout points detected.</p>';
+    }
+
+    html += `<h3>✅ Possible Action Items</h3>`;
+    if (actionItems.length) {
+      html += '<ul>' + actionItems.slice(0,8).map(a => `<li><span class="tag">${escapeHtml(a.name)}</span>${escapeHtml(a.text)}</li>`).join('') + '</ul>';
+    } else {
+      html += '<p style="color:var(--muted)">No action-item language detected.</p>';
+    }
+
+    html += `<h3>📌 Possible Decisions</h3>`;
+    if (decisions.length) {
+      html += '<ul>' + decisions.slice(0,6).map(d => `<li><span class="tag">${escapeHtml(d.name)}</span>${escapeHtml(d.text)}</li>`).join('') + '</ul>';
+    } else {
+      html += '<p style="color:var(--muted)">No decision language detected.</p>';
+    }
+
+    html += `<p style="color:var(--muted); font-size:0.75rem; margin-top:16px;">⚠️ This is a keyword-based heuristic summary generated locally, not an AI-generated summary. Not a verified quote source — review before relying on it.</p>`;
+
+    summaryContent.innerHTML = html;
+    summaryContent.dataset.plainText = buildPlainSummary(talkRanking, totalWords, keyPoints, actionItems, decisions);
+    showModal();
+  }
+
+  function buildPlainSummary(talkRanking, totalWords, keyPoints, actionItems, decisions) {
+    let out = 'MEETING SUMMARY (auto-generated, heuristic-based — not verified quotes)\n\n';
+    out += 'TALK-TIME BREAKDOWN:\n';
+    talkRanking.forEach(([name, words]) => {
+      out += `- ${name}: ${words} words (${Math.round((words/totalWords)*100)}%)\n`;
+    });
+    out += '\nKEY POINTS:\n';
+    keyPoints.forEach(p => out += `- [${p.name}] ${p.text}\n`);
+    out += '\nPOSSIBLE ACTION ITEMS:\n';
+    actionItems.slice(0,8).forEach(a => out += `- [${a.name}] ${a.text}\n`);
+    out += '\nPOSSIBLE DECISIONS:\n';
+    decisions.slice(0,6).forEach(d => out += `- [${d.name}] ${d.text}\n`);
+    return out;
+  }
+
+  function showModal(){ modalOverlay.classList.add('show'); }
+  function hideModal(){ modalOverlay.classList.remove('show'); }
+  document.getElementById('closeModal').addEventListener('click', hideModal);
+  document.getElementById('closeModalBtn').addEventListener('click', hideModal);
+  modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) hideModal(); });
+
+  document.getElementById('insertToNotes').addEventListener('click', () => {
+    const plain = summaryContent.dataset.plainText || '';
+    notesEl.value = (notesEl.value ? notesEl.value + '\n\n' : '') + plain;
+    hideModal();
+  });
+
+  summarizeBtn.addEventListener('click', generateSummary);
+
+
+  // ============ RESIZABLE TRANSCRIPT / NOTES PANELS ============
+  (function initSplitter(){
+    const main = document.getElementById('mainArea');
+    const tCol = document.getElementById('transcriptCol');
+    const splitter = document.getElementById('splitter');
+    const stackedMQ = window.matchMedia('(max-width:820px)');
+    const MIN_T = 320, MIN_N = 260;          // side-by-side minimum widths (px)
+    const MIN_T_H = 220;                     // stacked minimum height (px)
+    let ratio = null;                        // transcript share of available space; null = default layout
+
+    const stacked = () => stackedMQ.matches;
+
+    function bounds() {
+      if (stacked()) {
+        // Mobile: the page scrolls, so the transcript may grow up to ~1 screen tall
+        const avail = window.innerHeight;
+        return {avail, min: MIN_T_H, max: Math.max(MIN_T_H, Math.round(avail * 1.1))};
+      }
+      const cs = getComputedStyle(main);
+      const total = main.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const avail = total - splitter.offsetWidth;
+      return {avail, min: MIN_T, max: Math.max(MIN_T, avail - MIN_N)};
+    }
+
+    function apply(px) {
+      const b = bounds();
+      const size = Math.min(b.max, Math.max(b.min, px));
+      ratio = size / b.avail;
+      tCol.style.flex = '0 0 ' + size + 'px';
+      splitter.setAttribute('aria-valuenow', Math.round(ratio * 100));
+      splitter.setAttribute('aria-orientation', stacked() ? 'horizontal' : 'vertical');
+    }
+
+    function reset() {
+      ratio = null;
+      tCol.style.flex = '';
+      splitter.setAttribute('aria-valuenow', stacked() ? 75 : 66);
+    }
+
+    function currentSize() {
+      const r = tCol.getBoundingClientRect();
+      return stacked() ? r.height : r.width;
+    }
+
+    splitter.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      splitter.setPointerCapture(e.pointerId);
+      const startPos = stacked() ? e.clientY : e.clientX;
+      const startSize = currentSize();
+      splitter.classList.add('dragging');
+      document.body.classList.add('resizing');
+      document.body.classList.toggle('stacked-drag', stacked());
+
+      const move = (ev) => {
+        const pos = stacked() ? ev.clientY : ev.clientX;
+        apply(startSize + (pos - startPos));
+      };
+      const up = (ev) => {
+        splitter.releasePointerCapture(ev.pointerId);
+        splitter.removeEventListener('pointermove', move);
+        splitter.removeEventListener('pointerup', up);
+        splitter.removeEventListener('pointercancel', up);
+        splitter.classList.remove('dragging');
+        document.body.classList.remove('resizing', 'stacked-drag');
+      };
+      splitter.addEventListener('pointermove', move);
+      splitter.addEventListener('pointerup', up);
+      splitter.addEventListener('pointercancel', up);
+    });
+
+    splitter.addEventListener('dblclick', reset);
+
+    splitter.addEventListener('keydown', (e) => {
+      const step = e.shiftKey ? 80 : 24;
+      const dec = stacked() ? 'ArrowUp' : 'ArrowLeft';
+      const inc = stacked() ? 'ArrowDown' : 'ArrowRight';
+      if (e.key === dec)      { e.preventDefault(); apply(currentSize() - step); }
+      else if (e.key === inc) { e.preventDefault(); apply(currentSize() + step); }
+      else if (e.key === 'Home' || e.key === 'Escape') { e.preventDefault(); reset(); }
+    });
+
+    // Keep the chosen proportion when the window changes size
+    window.addEventListener('resize', () => {
+      if (ratio === null) return;
+      const b = bounds();
+      apply(ratio * b.avail);
+    });
+    stackedMQ.addEventListener('change', reset);
+  })();
+
+  window.addEventListener('beforeunload', () => {
+    try {
+      localStorage.removeItem('teams_meeting_notes');
+      localStorage.removeItem('teams_meeting_speakers');
+    } catch(e) {}
+  });
+  window.addEventListener('pagehide', () => {
+    if (micStream) micStream.getTracks().forEach(t => t.stop());
+  });
+</script>
+
+</body>
+</html>
