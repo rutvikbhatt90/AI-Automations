@@ -4,13 +4,15 @@
 <meta charset="UTF-8">
 <title>Meeting Transcriber</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
 <style>
   :root{
     --bg:#0f172a; --panel:#1e293b; --accent:#22c55e; --accent2:#38bdf8;
     --text:#e2e8f0; --muted:#94a3b8; --danger:#ef4444; --border:#334155;
   }
   *{box-sizing:border-box;}
-  body{margin:0; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px); font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); height:100vh; display:flex; flex-direction:column;}
+  html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
+  body{margin:0; padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px); font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--text); height:100vh; height:100dvh; display:flex; flex-direction:column;}
   header{padding:16px 24px; background:var(--panel); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;}
   header h1{margin:0; font-size:1.25rem;}
   header h1 span{color:var(--accent);}
@@ -93,14 +95,62 @@
   .banner .banner-close:hover{opacity:1;}
   .keep-open{margin-left:auto; display:flex; align-items:center; gap:6px;}
 
+  button{touch-action:manipulation;}
+  #transcript{overflow-wrap:anywhere; -webkit-overflow-scrolling:touch;}
+
+  /* Touch devices: bigger drag handle and tap targets */
+  @media (pointer:coarse){
+    .splitter{flex-basis:28px;}
+    .speaker-chip{padding:8px 12px;}
+    .speaker-chip .remove{padding:6px 8px; font-size:0.9rem;}
+    .add-speaker{padding:8px 14px;}
+  }
+
+  /* ---------- Mobile / narrow screens: one scrolling page, panels stacked ---------- */
   @media (max-width:820px){
-    main{flex-direction:column; overflow-y:auto; padding:12px;}
-    .transcript-col{flex:0 0 55%; min-width:0; min-height:280px;}
-    .notes-col{flex:1 0 240px; min-width:0; min-height:240px;}
-    .splitter{flex:0 0 16px; cursor:row-resize;}
+    body{height:auto; min-height:100vh; min-height:100dvh;}
+    header{padding:10px 14px; gap:8px;}
+    header h1{font-size:1.1rem;}
+    .meta-row{width:100%; gap:6px;}
+    input[type=text].title-input{flex:1 1 140px; width:auto; min-width:0;}
+    .mic-pill, .status{font-size:0.8rem;}
+    .setup-banner{display:block; padding:8px 14px; font-size:0.78rem; line-height:1.4;}
+    .banner{padding:8px 14px; font-size:0.78rem;}
+
+    main{flex:none; flex-direction:column; overflow:visible; padding:12px; min-height:0;}
+    .transcript-col{flex:0 0 auto; height:min(75vh,680px); height:min(75dvh,680px); min-width:0; min-height:220px;}
+    .notes-col{flex:1 0 auto; min-width:0; min-height:340px;}
+    #transcript{min-height:110px; padding:12px; font-size:1rem;}
+    #notes{min-height:160px;}
+    .splitter{flex:0 0 24px; cursor:row-resize;}
     .splitter::before{width:56px; height:4px;}
     .splitter:hover::before, .splitter:focus-visible::before, .splitter.dragging::before{width:80px; height:4px;}
     body.resizing{cursor:row-resize;}
+
+    .col-header{padding:10px 14px;}
+    .speaker-bar{padding:8px 12px; gap:6px;}
+    .auto-toggle{padding:0 12px 8px; font-size:0.78rem; line-height:1.5;}
+    .auto-toggle > span{display:none;}
+    .keep-open{margin-left:0; width:100%;}
+    .vol-meter{margin:0 12px 8px;}
+
+    /* Comfortable buttons: two per row, finger-sized */
+    .controls{padding:10px 12px; gap:8px;}
+    .controls button{flex:1 1 calc(50% - 8px); min-height:44px; padding:10px 12px;}
+    .controls .btn-stop{flex-basis:100%;}
+    .bridge-note{padding:0 12px 10px;}
+
+    /* 16px inputs stop iOS from zooming in on focus */
+    input[type=text], .speaker-chip input, .auto-toggle select, #notes{font-size:16px;}
+    .speaker-chip input{width:90px;}
+
+    footer{padding:10px 14px 16px; font-size:0.68rem; line-height:1.4;}
+
+    .modal-overlay{align-items:flex-end;}
+    .modal{width:100%; max-width:100%; max-height:90vh; max-height:90dvh; padding:16px; border-radius:16px 16px 0 0;}
+    #disclaimerModal .modal{max-width:100%;}
+    .modal .btn-secondary, .modal .btn-bridge, .modal .btn-primary-modal{min-height:44px;}
+    .toast{left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom,0px)); max-width:none;}
   }
 
   /* Modals */
@@ -169,7 +219,7 @@
 </div>
 
 <div class="banner" id="browserBanner">⚠️ Live transcription needs Chrome or Edge with microphone access. Typing/notes still work everywhere.</div>
-<div class="banner" id="originBanner"><span class="banner-close" id="originBannerClose" title="Dismiss">✕</span>🔒 <b>Why the microphone prompt keeps returning:</b> this page is open as a local file (or an insecure address). Chrome and Edge only remember "Allow" for <b>https://</b> pages or <b>localhost</b>. Host this file on an HTTPS site (e.g. SharePoint/intranet) and choose Allow once &mdash; the browser will remember it.</div>
+<div class="banner" id="originBanner"><span class="banner-close" id="originBannerClose" title="Dismiss">✕</span>🔒 <b>Why the microphone prompt keeps returning:</b> this page is open as a local file (or an insecure address). Chrome and Edge only remember "Allow" for <b>https://</b> pages or <b>localhost</b>. Host this file on an HTTPS site (e.g. GitHub Pages or your intranet) and choose Allow once &mdash; the browser will remember it.</div>
 
 <main id="mainArea">
   <div class="col transcript-col" id="transcriptCol">
@@ -872,20 +922,21 @@ ${notesEl.value}
     const splitter = document.getElementById('splitter');
     const stackedMQ = window.matchMedia('(max-width:820px)');
     const MIN_T = 320, MIN_N = 260;          // side-by-side minimum widths (px)
-    const MIN_T_H = 280, MIN_N_H = 240;      // stacked minimum heights (px)
+    const MIN_T_H = 220;                     // stacked minimum height (px)
     let ratio = null;                        // transcript share of available space; null = default layout
 
     const stacked = () => stackedMQ.matches;
 
     function bounds() {
+      if (stacked()) {
+        // Mobile: the page scrolls, so the transcript may grow up to ~1 screen tall
+        const avail = window.innerHeight;
+        return {avail, min: MIN_T_H, max: Math.max(MIN_T_H, Math.round(avail * 1.1))};
+      }
       const cs = getComputedStyle(main);
-      const total = stacked()
-        ? main.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)
-        : main.clientWidth  - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-      const avail = total - splitter.offsetWidth * (stacked() ? 0 : 1) - (stacked() ? splitter.offsetHeight : 0);
-      const min = stacked() ? MIN_T_H : MIN_T;
-      const max = avail - (stacked() ? MIN_N_H : MIN_N);
-      return {avail, min, max: Math.max(min, max)};
+      const total = main.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const avail = total - splitter.offsetWidth;
+      return {avail, min: MIN_T, max: Math.max(MIN_T, avail - MIN_N)};
     }
 
     function apply(px) {
@@ -900,7 +951,7 @@ ${notesEl.value}
     function reset() {
       ratio = null;
       tCol.style.flex = '';
-      splitter.setAttribute('aria-valuenow', stacked() ? 55 : 66);
+      splitter.setAttribute('aria-valuenow', stacked() ? 75 : 66);
     }
 
     function currentSize() {
