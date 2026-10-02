@@ -214,6 +214,11 @@
     .modal{width:100%; max-width:100%; max-height:90vh; max-height:90dvh; padding:16px; border-radius:16px 16px 0 0;}
     #disclaimerModal .modal{max-width:100%;}
     .modal .btn-secondary, .modal .btn-bridge, .modal .btn-primary-modal{min-height:44px;}
+    .col-header{flex-wrap:wrap; gap:6px;}
+    .fr-bar{padding:8px 12px;}
+    .fr-bar input[type=text]{flex:1 1 100%; font-size:16px;}
+    .fr-btn{min-height:40px;}
+    .modal-actions button{flex:1 1 100%; min-height:44px;}
     .toast{left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom,0px)); max-width:none;}
   }
 
@@ -234,6 +239,39 @@
   #nvTint{background:#ff0000; mix-blend-mode:multiply; z-index:9998;}
   #nvDim{background:#000; opacity:0; z-index:9999;}
   html[data-theme="night"] #nvTint, html[data-theme="night"] #nvDim{display:block;}
+
+  /* Header action + inline Find & Replace bar */
+  .hdr-right{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .icon-btn{background:var(--btn2-bg); color:var(--btn2-fg); padding:4px 10px; font-size:0.78rem; border-radius:999px;}
+  .icon-btn:hover{background:var(--btn2-hover);}
+  .icon-btn[aria-expanded="true"]{background:var(--primary); color:var(--on-primary);}
+  .fr-bar{padding:10px 16px; border-bottom:1px solid var(--border); background:var(--bg); display:flex; flex-direction:column; gap:8px;}
+  .fr-bar[hidden]{display:none;}
+  .fr-row{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .fr-bar input[type=text]{flex:1 1 160px; min-width:0; background:var(--panel); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:7px 10px; font-size:0.85rem; outline:none;}
+  .fr-bar input[type=text]:focus{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-ring);}
+  .fr-bar label{display:flex; align-items:center; gap:5px; font-size:0.78rem; color:var(--muted); cursor:pointer; white-space:nowrap;}
+  .fr-bar label input{accent-color:var(--accent); cursor:pointer;}
+  .fr-count{font-size:0.8rem; color:var(--muted); min-width:74px;}
+  .fr-btn{padding:6px 12px; font-size:0.8rem;}
+  .fr-spacer{flex:1 1 auto;}
+
+  /* In-transcript match highlighting (CSS Custom Highlight API) */
+  ::highlight(find-all){background-color:#fde68a; color:#1e293b;}
+  ::highlight(find-current){background-color:#7c3aed; color:#ffffff;}
+  html[data-theme="dark"] ::highlight(find-all){background-color:#854d0e; color:#fef3c7;}
+  html[data-theme="dark"] ::highlight(find-current){background-color:#a78bfa; color:#1e1b4b;}
+  html[data-theme="night"] ::highlight(find-all){background-color:#4a0a06; color:#ff7a6b;}
+  html[data-theme="night"] ::highlight(find-current){background-color:#ff3b2f; color:#000000;}
+
+  /* Confirmation dialog */
+  .modal-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:18px;}
+  .choice-preview{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:12px 0; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--bg); overflow-wrap:anywhere;}
+  .choice-preview .from{color:var(--muted); text-decoration:line-through;}
+  .choice-preview .arrow{color:var(--muted);}
+  .choice-preview .to{color:var(--accent); font-weight:700;}
+  #choiceModal .modal p{font-size:0.9rem; line-height:1.6; margin:8px 0;}
+  #choiceModal .modal .choice-note{font-size:0.8rem; color:var(--muted);}
 
   /* Modals */
   .modal-overlay{position:fixed; inset:0; background:var(--overlay); display:none; align-items:center; justify-content:center; z-index:100;}
@@ -318,7 +356,11 @@
 <main id="mainArea">
   <div class="col transcript-col" id="transcriptCol">
     <div class="col-header">
-      Transcript <small id="wordCount">0 words</small>
+      <span>Transcript</span>
+      <span class="hdr-right">
+        <small id="wordCount">0 words</small>
+        <button type="button" class="icon-btn" id="frToggle" aria-expanded="false" aria-controls="frBar" title="Find and replace words or names in the transcript">🔎 Find &amp; Replace</button>
+      </span>
     </div>
     <div class="speaker-bar" id="speakerBar"></div>
     <div class="auto-toggle">
@@ -336,6 +378,24 @@
       </label>
     </div>
     <div class="vol-meter"><div class="vol-fill" id="volFill"></div></div>
+    <div class="fr-bar" id="frBar" hidden role="search" aria-label="Find and replace in transcript">
+      <div class="fr-row">
+        <input type="text" id="frFind" placeholder="Find word or name…" aria-label="Find" autocomplete="off" spellcheck="false">
+        <input type="text" id="frReplace" placeholder="Replace with…" aria-label="Replace with" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="fr-row">
+        <span class="fr-count" id="frCount" aria-live="polite"></span>
+        <button type="button" class="btn-secondary fr-btn" id="frPrev" title="Previous match (Shift+Enter)" aria-label="Previous match">↑</button>
+        <button type="button" class="btn-secondary fr-btn" id="frNext" title="Next match (Enter)" aria-label="Next match">↓</button>
+        <label><input type="checkbox" id="frCase"> Match case</label>
+        <label><input type="checkbox" id="frWord"> Whole word</label>
+        <label title="Also search the speaker names shown at the start of each line"><input type="checkbox" id="frLabels"> Speaker labels</label>
+        <span class="fr-spacer"></span>
+        <button type="button" class="btn-secondary fr-btn" id="frReplaceOne">Replace</button>
+        <button type="button" class="btn-start fr-btn" id="frReplaceAll">Replace all</button>
+        <button type="button" class="btn-secondary fr-btn" id="frClose" title="Close (Esc)" aria-label="Close find and replace">✕</button>
+      </div>
+    </div>
     <div id="transcript" contenteditable="true"></div>
     <div class="controls">
       <button class="btn-start" id="startBtn">▶ Start</button>
@@ -380,6 +440,15 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
       <button class="btn-bridge" id="sendToMatchaBtnModal">🚀 Send to Meeting Summarizer</button>
       <button class="btn-secondary" id="closeModalBtn">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- Generic confirmation dialog (speaker rename / replace all) -->
+<div class="modal-overlay" id="choiceModal" role="dialog" aria-modal="true" aria-labelledby="choiceTitle">
+  <div class="modal">
+    <h2 id="choiceTitle"></h2>
+    <div id="choiceBody"></div>
+    <div class="modal-actions" id="choiceActions"></div>
   </div>
 </div>
 
@@ -482,6 +551,112 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   let lastResultTime = Date.now();
   let autoAdvanceFlag = false;
 
+  // ============ CONFIRMATION DIALOG (used for speaker rename + Replace all) ============
+  const choiceModal = document.getElementById('choiceModal');
+  const choiceTitle = document.getElementById('choiceTitle');
+  const choiceBody = document.getElementById('choiceBody');
+  const choiceActions = document.getElementById('choiceActions');
+  let choiceResolve = null, choiceReturnFocus = null;
+
+  function closeChoice(value) {
+    if (!choiceResolve) return;
+    const done = choiceResolve; choiceResolve = null;
+    choiceModal.classList.remove('show');
+    if (choiceReturnFocus && document.contains(choiceReturnFocus) && choiceReturnFocus.focus) {
+      try { choiceReturnFocus.focus({preventScroll:true}); } catch(e) {}
+    }
+    done(value);
+  }
+
+  // askChoice({title, lines:[...], preview:[from,to], note, choices:[{label,value,cls}]}) -> Promise<value>
+  // Escape / clicking outside resolves 'cancel'.
+  function askChoice(opts) {
+    return new Promise(resolve => {
+      if (choiceResolve) closeChoice('cancel');
+      choiceResolve = resolve;
+      choiceReturnFocus = document.activeElement;
+      choiceTitle.textContent = opts.title;
+      choiceBody.innerHTML = '';
+      (opts.lines || []).forEach(t => { const p = document.createElement('p'); p.textContent = t; choiceBody.appendChild(p); });
+      if (opts.preview) {
+        const box = document.createElement('div'); box.className = 'choice-preview';
+        const from = document.createElement('span'); from.className = 'from'; from.textContent = opts.preview[0];
+        const arrow = document.createElement('span'); arrow.className = 'arrow'; arrow.textContent = '→';
+        const to = document.createElement('span'); to.className = 'to'; to.textContent = opts.preview[1];
+        box.append(from, arrow, to);
+        choiceBody.appendChild(box);
+      }
+      if (opts.note) { const n = document.createElement('p'); n.className = 'choice-note'; n.textContent = opts.note; choiceBody.appendChild(n); }
+      choiceActions.innerHTML = '';
+      (opts.choices || []).forEach((c, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = c.cls || 'btn-primary-modal';
+        b.textContent = c.label;
+        b.addEventListener('click', () => closeChoice(c.value));
+        choiceActions.appendChild(b);
+        if (i === 0) setTimeout(() => b.focus(), 0);
+      });
+      choiceModal.classList.add('show');
+    });
+  }
+  choiceModal.addEventListener('mousedown', e => { if (e.target === choiceModal) closeChoice('cancel'); });
+  document.addEventListener('keydown', e => {
+    if (!choiceResolve) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeChoice('cancel'); }
+    else if (e.key === 'Tab') {                       // keep focus inside the dialog
+      const btns = Array.from(choiceActions.querySelectorAll('button'));
+      if (!btns.length) return;
+      const i = btns.indexOf(document.activeElement);
+      e.preventDefault();
+      btns[(i + (e.shiftKey ? -1 : 1) + btns.length) % btns.length].focus();
+    }
+  });
+
+  // ============ RENAME SPEAKER -> optionally relabel earlier lines (with confirmation) ============
+  function lineWord(n) { return n === 1 ? 'line' : 'lines'; }
+  function speakerSegs(id) {
+    return Array.from(transcriptEl.querySelectorAll('.seg:not(.interim)')).filter(seg => seg.dataset.speakerId == id);
+  }
+  function countRelabel(id, newName) {
+    return speakerSegs(id).filter(seg => { const el = seg.querySelector('.speaker-name'); return el && el.textContent !== newName; }).length;
+  }
+  function relabel(id, newName) {
+    let n = 0;
+    speakerSegs(id).forEach(seg => {
+      const el = seg.querySelector('.speaker-name');
+      if (el && el.textContent !== newName) { el.textContent = newName; n++; }   // only the label; transcript text is untouched
+    });
+    return n;
+  }
+  async function requestRename(sp, newName) {
+    const oldName = sp.name;
+    const count = countRelabel(sp.id, newName);
+    if (count === 0) { sp.name = newName; renderSpeakerBar(); return; }       // nothing captured yet: no need to ask
+    const choice = await askChoice({
+      title: '✏️ Update earlier lines too?',
+      lines: [
+        count + ' earlier ' + lineWord(count) + ' from this speaker ' + (count === 1 ? 'is' : 'are') + ' already in the transcript.',
+        'Do you want to change the speaker name on ' + (count === 1 ? 'that line' : 'those lines') + ' as well? Only the speaker label changes; the text of each line is left as it is.'
+      ],
+      preview: [oldName, newName],
+      note: 'New lines will use the new name either way.',
+      choices: [
+        {label: 'Update ' + count + ' earlier ' + lineWord(count), value: 'all'},
+        {label: 'New lines only', value: 'new', cls: 'btn-secondary'},
+        {label: 'Cancel rename', value: 'cancel', cls: 'btn-secondary'}
+      ]
+    });
+    if (choice === 'cancel') { renderSpeakerBar(); return; }                    // chip goes back to the old name
+    sp.name = newName;
+    if (choice === 'all') {
+      const n = relabel(sp.id, newName);
+      updateWordCount();
+      showToast('✅ Updated ' + n + ' earlier ' + lineWord(n) + ' to "' + newName + '"');
+    }
+    renderSpeakerBar();
+  }
+
   function renderSpeakerBar(){
     speakerBar.innerHTML = '';
     speakers.forEach((sp) => {
@@ -500,8 +675,9 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
       const input = chip.querySelector('input');
       input.addEventListener('click', e => e.stopPropagation());
       input.addEventListener('change', e => {
-        sp.name = e.target.value.trim() || sp.name;
-        renderSpeakerBar();
+        const newName = e.target.value.trim();
+        if (!newName || newName === sp.name) { renderSpeakerBar(); return; }
+        requestRename(sp, newName);                 // asks before touching earlier transcript lines
       });
       const removeBtn = chip.querySelector('.remove');
       removeBtn.addEventListener('click', e => {
@@ -530,7 +706,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   function escapeAttr(str){ return str.replace(/"/g,'&quot;'); }
 
   document.addEventListener('keydown', (e) => {
-    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.id === 'transcript') return;
+    if (choiceResolve || document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.id === 'transcript') return;
     const n = parseInt(e.key, 10);
     if (n && speakers[n-1]) {
       activeSpeakerId = speakers[n-1].id;
@@ -770,7 +946,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
       <span class="seg-body"><span class="speaker-name" style="color:${sp.color}">${escapeHtml(sp.name)}</span><span class="ts">${timestamp()}</span>${escapeHtml(text)}${wasAuto ? '<span class="auto-flag">(auto)</span>' : ''}</span>
     `;
     transcriptEl.appendChild(seg);
-    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    if (!window.__frHoldScroll) transcriptEl.scrollTop = transcriptEl.scrollHeight;
   }
 
   function updateInterim(text) {
@@ -781,7 +957,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     interimSpan.className = 'seg interim';
     interimSpan.innerHTML = `<span class="swatch" style="background:${sp.color}"></span><span class="seg-body">${escapeHtml(text)}</span>`;
     transcriptEl.appendChild(interimSpan);
-    transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    if (!window.__frHoldScroll) transcriptEl.scrollTop = transcriptEl.scrollHeight;
   }
 
   function escapeHtml(str) {
@@ -960,7 +1136,8 @@ ${notesEl.value}
     segs.forEach(seg => {
       const spId = seg.dataset.speakerId;
       const sp = speakers.find(s => s.id == spId);
-      const name = sp ? sp.name : 'Unknown';
+      const labelEl = seg.querySelector('.speaker-name');
+      const name = (labelEl && labelEl.textContent.trim()) || (sp ? sp.name : 'Unknown');
       const text = seg.dataset.text || '';
       bySpeaker[name] = (bySpeaker[name] || 0) + text.split(/\s+/).filter(Boolean).length;
 
@@ -1047,6 +1224,214 @@ ${notesEl.value}
 
   summarizeBtn.addEventListener('click', generateSummary);
 
+
+  // ============ FIND & REPLACE (words, names, anything in the transcript) ============
+  (function initFindReplace(){
+    const bar = document.getElementById('frBar');
+    const findIn = document.getElementById('frFind');
+    const replIn = document.getElementById('frReplace');
+    const countEl = document.getElementById('frCount');
+    const caseCb = document.getElementById('frCase');
+    const wordCb = document.getElementById('frWord');
+    const labelsCb = document.getElementById('frLabels');
+    const prevBtn = document.getElementById('frPrev');
+    const nextBtn = document.getElementById('frNext');
+    const oneBtn = document.getElementById('frReplaceOne');
+    const allBtn = document.getElementById('frReplaceAll');
+    const closeBtn = document.getElementById('frClose');
+    const toggleBtn = document.getElementById('frToggle');
+    const hasHL = typeof Highlight !== 'undefined' && window.CSS && CSS.highlights;
+
+    let matches = [], cur = -1, observer = null, timer = null;
+    window.__frHoldScroll = false;                 // while navigating matches, don't let new speech yank the view away
+
+    function buildRegex() {
+      const q = findIn.value;
+      if (!q) return null;
+      let src = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (wordCb.checked) src = '(?<![\\p{L}\\p{N}_])' + src + '(?![\\p{L}\\p{N}_])';
+      try { return new RegExp(src, 'gu' + (caseCb.checked ? '' : 'i')); } catch (e) { return null; }
+    }
+
+    // Text nodes we are allowed to search: spoken text only (never timestamps, "(auto)" flags or live interim text)
+    function searchableNodes() {
+      const out = [];
+      const w = document.createTreeWalker(transcriptEl, NodeFilter.SHOW_TEXT);
+      let n;
+      while ((n = w.nextNode())) {
+        const p = n.parentElement;
+        if (!p || !n.nodeValue) continue;
+        if (p.closest('.interim, .ts, .auto-flag')) continue;
+        if (!labelsCb.checked && p.closest('.speaker-name')) continue;
+        out.push(n);
+      }
+      return out;
+    }
+
+    function findAll() {
+      const re = buildRegex(), list = [];
+      if (!re) return list;
+      searchableNodes().forEach(node => {
+        const text = node.nodeValue; re.lastIndex = 0; let m;
+        while ((m = re.exec(text))) {
+          if (m[0].length === 0) { re.lastIndex++; continue; }
+          list.push({node, start: m.index, end: m.index + m[0].length});
+        }
+      });
+      return list;
+    }
+
+    function toRange(m) { const r = document.createRange(); r.setStart(m.node, m.start); r.setEnd(m.node, m.end); return r; }
+
+    function spokenText(seg) {
+      let t = '';
+      const w = document.createTreeWalker(seg, NodeFilter.SHOW_TEXT);
+      let n;
+      while ((n = w.nextNode())) {
+        if (n.parentElement && n.parentElement.closest('.speaker-name, .ts, .auto-flag')) continue;
+        t += n.nodeValue;
+      }
+      return t.trim();
+    }
+    // The summary reads seg.dataset.text, so keep it in step with what is on screen
+    function syncSeg(node) {
+      const seg = node.parentElement && node.parentElement.closest('.seg');
+      if (seg && !seg.classList.contains('interim')) seg.dataset.text = spokenText(seg);
+    }
+
+    function scrollToMatch(m) {
+      const r = toRange(m).getBoundingClientRect(), b = transcriptEl.getBoundingClientRect();
+      if (r.top < b.top + 24 || r.bottom > b.bottom - 24) transcriptEl.scrollTop += (r.top - b.top) - b.height / 2;
+    }
+
+    function paint(scroll) {
+      if (hasHL) {
+        CSS.highlights.delete('find-all'); CSS.highlights.delete('find-current');
+        if (matches.length) {
+          CSS.highlights.set('find-all', new Highlight(...matches.map(toRange)));
+          if (cur >= 0) { const h = new Highlight(toRange(matches[cur])); h.priority = 1; CSS.highlights.set('find-current', h); }
+        }
+      }
+      countEl.textContent = !findIn.value ? '' : matches.length ? (cur + 1) + ' of ' + matches.length : 'No matches';
+      const has = matches.length > 0;
+      prevBtn.disabled = nextBtn.disabled = oneBtn.disabled = allBtn.disabled = !has;
+      if (cur >= 0 && matches[cur]) {
+        if (scroll) scrollToMatch(matches[cur]);
+        if (!hasHL) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(toRange(matches[cur])); }
+      }
+    }
+
+    function refresh(scroll) {
+      const prev = cur;
+      matches = findAll();
+      cur = matches.length ? Math.max(0, Math.min(prev, matches.length - 1)) : -1;
+      paint(scroll);
+    }
+
+    function step(dir) {
+      matches = findAll();
+      if (!matches.length) { cur = -1; paint(false); return; }
+      cur = cur < 0 ? (dir > 0 ? 0 : matches.length - 1) : (cur + dir + matches.length) % matches.length;
+      window.__frHoldScroll = true;
+      paint(true);
+    }
+
+    function countIn(str) {
+      const re = buildRegex(); if (!re || !str) return 0;
+      let c = 0, m; re.lastIndex = 0;
+      while ((m = re.exec(str))) { if (m[0].length === 0) { re.lastIndex++; continue; } c++; }
+      return c;
+    }
+
+    function replaceOne() {
+      if (cur < 0 || !matches[cur]) return;
+      const m = matches[cur], repl = replIn.value;
+      const re = buildRegex();
+      const still = m.node.isConnected && m.node.nodeValue.slice(m.start, m.end);
+      if (!re || !still || !new RegExp(re.source, re.flags.replace('g','')).test(still)) { refresh(false); return; }   // text changed under us
+      const keep = cur;
+      m.node.replaceData(m.start, m.end - m.start, repl);
+      syncSeg(m.node);
+      updateWordCount();
+      matches = findAll();
+      cur = matches.length ? (keep + countIn(repl)) % matches.length : -1;          // skip over matches created by the replacement itself
+      window.__frHoldScroll = true;
+      paint(true);
+    }
+
+    async function replaceAll() {
+      const list = findAll();
+      if (!list.length) return;
+      const repl = replIn.value;
+      const lineCount = new Set(list.map(m => m.node.parentElement.closest('.seg') || m.node)).size;
+      const n = list.length;
+      const choice = await askChoice({
+        title: '🔁 Replace in the captured transcript?',
+        lines: [
+          'This will change ' + n + ' ' + (n === 1 ? 'occurrence' : 'occurrences') + ' across ' + lineCount + ' ' + lineWord(lineCount) + ' that ' + (lineCount === 1 ? 'is' : 'are') + ' already in the transcript.'
+        ],
+        preview: [findIn.value, repl === '' ? '(nothing – remove it)' : repl],
+        note: labelsCb.checked
+          ? 'Speaker labels are included. To rename a speaker for new lines as well, edit the name chip above the transcript instead.'
+          : 'Speaker labels, timestamps and the live (grey) line are not changed.',
+        choices: [
+          {label: 'Replace ' + n, value: 'yes'},
+          {label: 'Cancel', value: 'cancel', cls: 'btn-secondary'}
+        ]
+      });
+      if (choice !== 'yes') return;
+      // Recount at apply time: live transcription may have added lines while the dialog was open
+      const re = buildRegex(); if (!re) return;
+      let total = 0;
+      searchableNodes().forEach(node => {
+        let c = 0;
+        const next = node.nodeValue.replace(re, () => { c++; return repl; });   // function form: "$&" etc. in the replacement stay literal
+        if (c) { node.nodeValue = next; total += c; syncSeg(node); }
+      });
+      updateWordCount();
+      cur = -1;
+      refresh(false);
+      showToast('✅ Replaced ' + total + ' ' + (total === 1 ? 'occurrence' : 'occurrences'));
+    }
+
+    function openBar() {
+      bar.hidden = false;
+      toggleBtn.setAttribute('aria-expanded', 'true');
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount && transcriptEl.contains(sel.anchorNode)) {      // pre-fill with selected text
+        const t = sel.toString().trim();
+        if (t && t.length <= 80 && !/\n/.test(t)) findIn.value = t;
+      }
+      if (!observer) {
+        observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => refresh(false), 250); });
+        observer.observe(transcriptEl, {childList: true, subtree: true, characterData: true});
+      }
+      findIn.focus(); findIn.select();
+      refresh(false);
+    }
+
+    function closeBar() {
+      bar.hidden = true;
+      toggleBtn.setAttribute('aria-expanded', 'false');
+      if (observer) { observer.disconnect(); observer = null; }
+      clearTimeout(timer);
+      if (hasHL) { CSS.highlights.delete('find-all'); CSS.highlights.delete('find-current'); }
+      window.__frHoldScroll = false;
+      matches = []; cur = -1;
+      toggleBtn.focus();
+    }
+
+    toggleBtn.addEventListener('click', () => { bar.hidden ? openBar() : closeBar(); });
+    closeBtn.addEventListener('click', closeBar);
+    nextBtn.addEventListener('click', () => step(1));
+    prevBtn.addEventListener('click', () => step(-1));
+    oneBtn.addEventListener('click', replaceOne);
+    allBtn.addEventListener('click', replaceAll);
+    [findIn, caseCb, wordCb, labelsCb].forEach(el => el.addEventListener(el === findIn ? 'input' : 'change', () => { cur = matches.length ? 0 : -1; refresh(true); }));
+    findIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); step(e.shiftKey ? -1 : 1); } });
+    replIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); replaceOne(); } });
+    bar.addEventListener('keydown', e => { if (e.key === 'Escape' && !choiceResolve) { e.preventDefault(); closeBar(); } });
+  })();
 
   // ============ RESIZABLE TRANSCRIPT / NOTES PANELS ============
   (function initSplitter(){
