@@ -194,6 +194,8 @@
     .col-header{padding:10px 14px;}
     .speaker-bar{padding:8px 12px; gap:6px;}
     .auto-toggle{padding:0 12px 8px; font-size:0.78rem; line-height:1.5;}
+    .source-row{padding:0 12px 8px;}
+    .source-row select{font-size:16px; flex:1 1 100%;}
     .auto-toggle > span{display:none;}
     .keep-open{margin-left:0; width:100%;}
     .vol-meter{margin:0 12px 8px;}
@@ -273,6 +275,12 @@
   #choiceModal .modal p{font-size:0.9rem; line-height:1.6; margin:8px 0;}
   #choiceModal .modal .choice-note{font-size:0.8rem; color:var(--muted);}
 
+  /* Audio source selector */
+  .source-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:0.8rem; color:var(--muted); padding:0 16px 8px;}
+  .source-row select{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:4px 8px; font-size:0.8rem; max-width:100%;}
+  .source-row select:disabled{opacity:.6; cursor:not-allowed;}
+  .source-row .src-hint{flex:1 1 100%; font-size:0.76rem; line-height:1.45;}
+
   /* Modals */
   .modal-overlay{position:fixed; inset:0; background:var(--overlay); display:none; align-items:center; justify-content:center; z-index:100;}
   .modal-overlay.show{display:flex;}
@@ -347,7 +355,7 @@
 <div class="strip"></div>
 
 <div class="setup-banner">
-  🔊 <b>Setup:</b> Join meetings normally, play meeting audio through your <b>speakers</b> (not headphones) so your mic can pick it up. Keep volume clear, not too loud/quiet. Then hit Start. Your browser asks for microphone access <b>once</b> &mdash; choose <b>Allow</b>.
+  🔊 <b>Setup:</b> Join meetings normally, play meeting audio through your <b>speakers</b> so your mic can pick it up &mdash; or wearing headphones? Choose <b>Meeting audio</b> as the audio source below. Keep volume clear, not too loud/quiet. Then hit Start. Your browser asks for microphone access <b>once</b> &mdash; choose <b>Allow</b>.
 </div>
 
 <div class="banner" id="browserBanner">⚠️ Live transcription needs Chrome or Edge with microphone access. Typing/notes still work everywhere.</div>
@@ -363,6 +371,15 @@
       </span>
     </div>
     <div class="speaker-bar" id="speakerBar"></div>
+    <div class="source-row">
+      <label for="audioSource">🎧 Audio source</label>
+      <select id="audioSource" aria-describedby="srcHint">
+        <option value="mic">Microphone (play meeting on speakers)</option>
+        <option value="meeting">Meeting audio — works with headphones</option>
+        <option value="both">Meeting audio + my microphone</option>
+      </select>
+      <span class="src-hint" id="srcHint"></span>
+    </div>
     <div class="auto-toggle">
       <input type="checkbox" id="autoSwitch" checked>
       <label for="autoSwitch">Auto-switch speaker after pause of</label>
@@ -741,6 +758,12 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   let audioCtx = null, analyser = null, micStream = null, micRequest = null, rafId = null;
 
   function setMicPill(state) {
+    if (typeof audioSourceSel !== 'undefined' && audioSourceSel.value === 'meeting') {
+      micPill.classList.toggle('granted', state === 'live');
+      micPill.classList.remove('denied');
+      micPillText.textContent = state === 'live' ? 'Meeting audio: live' : 'Meeting audio: pick a tab';
+      return;
+    }
     micPill.classList.toggle('granted', state === 'granted');
     micPill.classList.toggle('denied', state === 'denied');
     micPillText.textContent =
@@ -791,15 +814,21 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     if (!micPill.classList.contains('denied')) setMicPill('granted');
   }
 
-  function startMeter(stream) {
+  // Meters one or more streams. With mix=true also returns a single mixed audio track (used for meeting + mic).
+  function startMeter(streams, mix) {
     stopMeter();
+    let mixTrack = null;
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === 'suspended') audioCtx.resume();
-      const source = audioCtx.createMediaStreamSource(stream);
+      const bus = audioCtx.createGain();
+      streams.forEach(st => audioCtx.createMediaStreamSource(st).connect(bus));
       analyser = audioCtx.createAnalyser();
       analyser.fftSize = 512;
-      source.connect(analyser);
+      bus.connect(analyser);
+      const mute = audioCtx.createGain(); mute.gain.value = 0;         // keeps the graph running without playing anything aloud
+      bus.connect(mute); mute.connect(audioCtx.destination);
+      if (mix) { const dest = audioCtx.createMediaStreamDestination(); bus.connect(dest); mixTrack = dest.stream.getAudioTracks()[0]; }
       const data = new Uint8Array(analyser.frequencyBinCount);
       const tick = () => {
         if (!analyser) return;
@@ -810,6 +839,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
       };
       tick();
     } catch(e) { console.warn('Volume meter unavailable:', e); }
+    return mixTrack;
   }
 
   function stopMeter() {
@@ -834,6 +864,122 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     }
   }
 
+  // ============ AUDIO SOURCE: microphone / meeting audio (tab or system) / both ============
+  // "Meeting audio" captures the sound the computer is playing (via the browser's share-audio picker)
+  // and hands that audio track straight to speech recognition, so headphones are fine.
+  const audioSourceSel = document.getElementById('audioSource');
+  const srcHint = document.getElementById('srcHint');
+  let displayStream = null;     // screen/tab share that carries the meeting audio
+  let activeTrack = null;       // audio track given to speech recognition (null = default microphone)
+
+  const chromeVer = (navigator.userAgent.match(/(?:Chrome|Edg)\/(\d+)/) || [])[1];
+  const canCaptureMeeting = !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)
+    && parseInt(chromeVer || '0', 10) >= 135
+    && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+
+  const SRC_HINTS = {
+    mic: 'Listens through the microphone, so the meeting must play on speakers (not headphones).',
+    meeting: 'Press Start, then share the meeting\'s browser tab and tick "Also share tab audio" (or Entire screen + "Also share system audio" on Windows). Headphones are fine.',
+    both: 'Captures the meeting\'s sound plus your own voice. Press Start, then share the meeting tab or screen with audio ticked.'
+  };
+  function refreshSrcHint() {
+    srcHint.textContent = canCaptureMeeting ? SRC_HINTS[audioSourceSel.value]
+      : 'Meeting audio (headphone-friendly) needs Chrome or Edge 135+ on a computer. On this device, use the microphone and play the meeting on speakers.';
+  }
+  if (!canCaptureMeeting) {
+    Array.from(audioSourceSel.options).forEach(o => { if (o.value !== 'mic') { o.disabled = true; o.textContent += ' (computer only)'; } });
+    audioSourceSel.value = 'mic';
+  }
+  audioSourceSel.addEventListener('change', () => {
+    refreshSrcHint();
+    setMicPill(micIsLive() ? 'live' : 'prompt');
+  });
+  refreshSrcHint();
+
+  function displayIsLive() {
+    return !!displayStream && displayStream.getAudioTracks().some(t => t.readyState === 'live');
+  }
+
+  async function ensureDisplay() {
+    if (displayIsLive()) return displayStream;
+    const s = await navigator.mediaDevices.getDisplayMedia({
+      video: {width: {max: 320}, height: {max: 180}, frameRate: {max: 1}},   // video is required by the API; keep it tiny
+      audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false},
+      systemAudio: 'include',
+      selfBrowserSurface: 'exclude'
+    });
+    if (!s.getAudioTracks().length) {
+      s.getTracks().forEach(t => t.stop());
+      const e = new Error('No audio was shared'); e.name = 'NoAudioShared'; throw e;
+    }
+    displayStream = s;
+    const onEnd = () => { if (displayStream === s) { displayStream = null; handleDisplayLost(); } };
+    s.getTracks().forEach(t => t.addEventListener('ended', onEnd));        // user clicked the browser's "Stop sharing"
+    return s;
+  }
+
+  function handleDisplayLost() {
+    const wasRunning = listening;
+    activeTrack = null;
+    stopMeter();
+    if (wasRunning) {
+      listening = false; paused = false;
+      try { recognition.abort(); } catch (e) {}
+      releaseAllAudio();
+      updateInterim('');
+      resetButtons();
+      setStatus('Sharing stopped', false);
+      showToast('🛑 Meeting audio sharing was stopped. Your transcript is kept - press Start to share again.', 7000);
+    }
+    setMicPill('prompt');
+  }
+
+  function releaseAllAudio() {
+    const d = displayStream; displayStream = null; activeTrack = null;
+    if (d) d.getTracks().forEach(t => t.stop());
+    releaseMic();
+  }
+
+  // Opens whatever the chosen source needs (re-using streams that are already open) and sets activeTrack
+  async function prepareAudio() {
+    const mode = audioSourceSel.value;
+    if (mode === 'mic') {
+      const mic = await ensureMic();
+      startMeter([mic], false);
+      activeTrack = null;
+      return;
+    }
+    let disp;
+    try { disp = await ensureDisplay(); } catch (e) { e.step = 'display'; throw e; }
+    if (mode === 'meeting') {
+      startMeter([disp], false);
+      activeTrack = disp.getAudioTracks()[0];
+    } else {
+      const mic = await ensureMic();
+      const mixed = startMeter([disp, mic], true);                      // meeting + me, mixed into one track
+      if (!mixed) throw new Error('Could not combine the audio sources');
+      activeTrack = mixed;
+    }
+    setMicPill('live');
+  }
+
+  function explainAudioError(err) {
+    if (err && err.name === 'NoAudioShared') {
+      setStatus('No audio was shared', false);
+      showToast('🔇 No audio came with the share. Choose the meeting\'s browser tab and tick "Also share tab audio" (or Entire screen + "Also share system audio" on Windows), then press Start again.', 11000);
+    } else if (err && err.step === 'display') {
+      if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+        setStatus('Sharing cancelled', false);
+        showToast('Meeting audio sharing was cancelled. Press Start to try again.', 5000);
+      } else {
+        setStatus('Could not capture meeting audio', false);
+        showToast('⚠️ Could not capture meeting audio: ' + ((err && err.message) || 'unknown error'), 7000);
+      }
+    } else {
+      explainMicError(err);
+    }
+  }
+
   let networkErrors = 0;
 
   // Start recognition, tolerating the brief window where a previous session is still closing
@@ -841,7 +987,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   function safeStart() {
     if (!recognition || !listening || paused) return;
     try {
-      recognition.start();
+      if (activeTrack) recognition.start(activeTrack); else recognition.start();   // activeTrack = meeting audio
       startRetries = 0;
     } catch (e) {
       if (e && e.name === 'InvalidStateError' && startRetries < 5) {
@@ -891,15 +1037,15 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
       console.warn('Speech recognition error:', e.error);
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         listening = false;
-        releaseMic();
+        releaseAllAudio();
         setMicPill('denied');
         setStatus('Mic access denied', false);
         showToast('🚫 Microphone is blocked. Click the 🔒 icon in the address bar → Microphone → Allow, then press Start again.', 8000);
         resetButtons();
       } else if (e.error === 'audio-capture') {
         listening = false;
-        releaseMic();
-        setStatus('No microphone found', false);
+        releaseAllAudio();
+        setStatus(audioSourceSel.value === 'mic' ? 'No microphone found' : 'Audio source lost', false);
         resetButtons();
       } else if (e.error === 'network') {
         networkErrors++;
@@ -907,7 +1053,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
           // Give up instead of looping forever: the browser's speech service can't be reached
           listening = false; paused = false;
           try { recognition.abort(); } catch(err) {}
-          releaseMic();
+          releaseAllAudio();
           updateInterim('');
           resetButtons();
           networkErrors = 0;
@@ -979,24 +1125,25 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   function resetButtons() {
     listening = false; paused = false;
     startBtn.disabled = false; pauseBtn.disabled = true; stopBtn.disabled = true;
+    audioSourceSel.disabled = false;
     pauseBtn.textContent = '⏸ Pause';
   }
 
   startBtn.addEventListener('click', async () => {
     if (!recognition) return;
     startBtn.disabled = true;
-    setStatus('Waiting for microphone...', false);
+    setStatus(audioSourceSel.value === 'mic' ? 'Waiting for microphone...' : 'Waiting for audio share...', false);
     try {
-      const stream = await ensureMic();          // the ONE permission request
-      startMeter(stream);
+      await prepareAudio();                      // mic: the ONE permission request; meeting: the share picker
     } catch (err) {
-      explainMicError(err);
+      explainAudioError(err);
       startBtn.disabled = false;
       return;
     }
     lastResultTime = Date.now();
     networkErrors = 0;
     listening = true; paused = false;
+    audioSourceSel.disabled = true;
     pauseBtn.disabled = false; stopBtn.disabled = false;
     setStatus('Listening...', true);
     safeStart();
@@ -1007,16 +1154,16 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     if (!paused) {
       paused = true;
       recognition.stop();
-      if (!keepMicOpen.checked) releaseMic();
+      const micOnly = audioSourceSel.value === 'mic';
+      if (micOnly && !keepMicOpen.checked) releaseMic();          // shared meeting audio stays open so you aren't asked to pick the tab again
       pauseBtn.textContent = '▶ Resume';
-      setStatus(keepMicOpen.checked ? 'Paused (mic held open)' : 'Paused', false);
+      setStatus(!micOnly ? 'Paused (audio still shared)' : keepMicOpen.checked ? 'Paused (mic held open)' : 'Paused', false);
     } else {
       pauseBtn.disabled = true;
       try {
-        const stream = await ensureMic();        // no prompt if the stream was kept open
-        startMeter(stream);
+        await prepareAudio();                    // no prompt if the stream was kept open
       } catch (err) {
-        explainMicError(err);
+        explainAudioError(err);
         pauseBtn.disabled = false;
         return;
       }
@@ -1033,7 +1180,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     if (!recognition) return;
     listening = false; paused = false;
     recognition.stop();
-    releaseMic();                                 // mic is always released on Stop
+    releaseAllAudio();                            // mic and shared audio are always released on Stop
     updateInterim('');
     resetButtons();
     setStatus('Stopped', false);
@@ -1531,6 +1678,7 @@ ${notesEl.value}
   });
   window.addEventListener('pagehide', () => {
     if (micStream) micStream.getTracks().forEach(t => t.stop());
+    if (displayStream) displayStream.getTracks().forEach(t => t.stop());
   });
 </script>
 
