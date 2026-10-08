@@ -280,6 +280,7 @@
   .source-row select{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:4px 8px; font-size:0.8rem; max-width:100%;}
   .source-row .diag{font-family:Consolas,Menlo,monospace; font-size:0.72rem; color:var(--accent); background:var(--bg); border:1px dashed var(--border); border-radius:6px; padding:6px 8px; overflow-wrap:anywhere;}
   .source-row .diag[hidden]{display:none;}
+  .source-row label{white-space:nowrap;}
   .source-row select:disabled{opacity:.6; cursor:not-allowed;}
   .source-row .src-hint{flex:1 1 100%; font-size:0.76rem; line-height:1.45;}
 
@@ -379,6 +380,13 @@
         <option value="mic">Microphone (play meeting on speakers)</option>
         <option value="meeting">Meeting audio — works with headphones</option>
         <option value="both">Meeting audio + my microphone</option>
+      </select>
+      <label for="langSel">Language</label>
+      <select id="langSel" aria-label="Spoken language">
+        <option value="en-CA">English (Canada)</option>
+        <option value="en-US">English (US)</option>
+        <option value="en-GB">English (UK)</option>
+        <option value="fr-CA">Français (Canada)</option>
       </select>
       <span class="src-hint" id="srcHint"></span>
       <span class="src-hint diag" id="diagLine" hidden></span>
@@ -901,9 +909,9 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   refreshSrcHint();
 
   // ---- Live diagnostics (shown only for the meeting-audio sources) ----
-  const diag = {lastSoundAt: 0, results: 0, lastEvent: '-', lastError: '-', startedAt: 0, warned: false};
+  const diag = {finals: 0, lastSoundAt: 0, results: 0, lastEvent: '-', lastError: '-', startedAt: 0, warned: false};
   const diagLine = document.getElementById('diagLine');
-  function resetDiag() { Object.assign(diag, {lastSoundAt: 0, results: 0, lastEvent: 'waiting', lastError: '-', startedAt: Date.now(), warned: false}); }
+  function resetDiag() { Object.assign(diag, {finals: 0, lastSoundAt: 0, results: 0, lastEvent: 'waiting', lastError: '-', startedAt: Date.now(), warned: false}); }
   setInterval(() => {
     const show = listening && audioSourceSel.value !== 'mic';
     diagLine.hidden = !show;
@@ -914,7 +922,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
       ' | Audio track: ' + (activeTrack ? activeTrack.readyState : '-') +
       ' | Sound: ' + (hearing ? 'hearing audio' : quiet === Infinity ? 'none heard yet' : 'silent for ' + Math.round(quiet / 1000) + 's') +
       ' | Speech service: ' + diag.lastEvent + (diag.lastError !== '-' ? ' (last error: ' + diag.lastError + ')' : '') +
-      ' | Text results: ' + diag.results;
+      ' | Updates: ' + diag.results + ' | Lines saved: ' + diag.finals;
     if (!diag.warned && !paused && diag.results === 0 && Date.now() - diag.startedAt > 25000) {
       diag.warned = true;
       if (hearing) showToast('⚠️ The app is receiving meeting audio, but the browser\'s speech service is returning no text. This browser build may not recognize shared audio. See the Check line, or use the microphone with speakers / Teams live captions.', 14000);
@@ -1008,11 +1016,26 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
 
   let networkErrors = 0;
 
+  // Words the engine has heard but not yet marked final (the grey line). If the session ends, errors out,
+  // or the engine goes quiet for a few seconds, commit them as a real line instead of losing them.
+  let pendingInterim = '', lastInterimAt = 0;
+  function flushPending() {
+    const t = pendingInterim.trim();
+    pendingInterim = '';
+    if (t) { addSegment(t, false); updateInterim(''); updateWordCount(); }
+  }
+  setInterval(() => {
+    if (listening && !paused && recognition && pendingInterim.trim() && Date.now() - lastInterimAt > 3000) {
+      try { recognition.stop(); } catch (e) {}      // asks the engine to finalize what it has; onend then flushes + restarts
+    }
+  }, 1000);
+
   // Start recognition, tolerating the brief window where a previous session is still closing
   let startRetries = 0;
   function safeStart() {
     if (!recognition || !listening || paused) return;
     try {
+      recognition.lang = document.getElementById('langSel').value;
       if (activeTrack) recognition.start(activeTrack); else recognition.start();   // activeTrack = meeting audio
       startRetries = 0;
     } catch (e) {
@@ -1032,7 +1055,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = 'en-US';
+    recognition.lang = (document.getElementById('langSel') || {}).value || 'en-CA';
 
     recognition.onstart = () => {
       diag.lastEvent = 'listening';
@@ -1056,7 +1079,8 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
         if (res.isFinal) finalText += res[0].transcript;
         else interimText += res[0].transcript;
       }
-      if (finalText.trim()) { addSegment(finalText.trim(), autoAdvanceFlag); autoAdvanceFlag = false; }
+      if (finalText.trim()) { addSegment(finalText.trim(), autoAdvanceFlag); autoAdvanceFlag = false; diag.finals++; }
+      pendingInterim = interimText; lastInterimAt = Date.now();
       updateInterim(interimText);
       updateWordCount();
     };
@@ -1097,6 +1121,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
 
     recognition.onend = () => {
       diag.lastEvent = 'restarting';
+      flushPending();
       if (listening && !paused) setTimeout(safeStart, networkErrors ? 1000 * networkErrors : 250);
     };
   }
@@ -1155,7 +1180,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   function resetButtons() {
     listening = false; paused = false;
     startBtn.disabled = false; pauseBtn.disabled = true; stopBtn.disabled = true;
-    audioSourceSel.disabled = false;
+    audioSourceSel.disabled = false; document.getElementById('langSel').disabled = false;
     pauseBtn.textContent = '⏸ Pause';
   }
 
@@ -1174,7 +1199,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     networkErrors = 0;
     resetDiag();
     listening = true; paused = false;
-    audioSourceSel.disabled = true;
+    audioSourceSel.disabled = true; document.getElementById('langSel').disabled = true;
     pauseBtn.disabled = false; stopBtn.disabled = false;
     setStatus('Listening...', true);
     safeStart();
