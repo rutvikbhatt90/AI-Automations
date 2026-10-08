@@ -278,6 +278,8 @@
   /* Audio source selector */
   .source-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:0.8rem; color:var(--muted); padding:0 16px 8px;}
   .source-row select{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:4px 8px; font-size:0.8rem; max-width:100%;}
+  .source-row .diag{font-family:Consolas,Menlo,monospace; font-size:0.72rem; color:var(--accent); background:var(--bg); border:1px dashed var(--border); border-radius:6px; padding:6px 8px; overflow-wrap:anywhere;}
+  .source-row .diag[hidden]{display:none;}
   .source-row select:disabled{opacity:.6; cursor:not-allowed;}
   .source-row .src-hint{flex:1 1 100%; font-size:0.76rem; line-height:1.45;}
 
@@ -379,6 +381,7 @@
         <option value="both">Meeting audio + my microphone</option>
       </select>
       <span class="src-hint" id="srcHint"></span>
+      <span class="src-hint diag" id="diagLine" hidden></span>
     </div>
     <div class="auto-toggle">
       <input type="checkbox" id="autoSwitch" checked>
@@ -834,6 +837,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
         if (!analyser) return;
         analyser.getByteFrequencyData(data);
         const avg = data.reduce((a,b)=>a+b,0)/data.length;
+        if (avg > 3) diag.lastSoundAt = Date.now();
         volFill.style.width = Math.min(100, avg*1.6) + '%';
         rafId = requestAnimationFrame(tick);
       };
@@ -895,6 +899,28 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     setMicPill(micIsLive() ? 'live' : 'prompt');
   });
   refreshSrcHint();
+
+  // ---- Live diagnostics (shown only for the meeting-audio sources) ----
+  const diag = {lastSoundAt: 0, results: 0, lastEvent: '-', lastError: '-', startedAt: 0, warned: false};
+  const diagLine = document.getElementById('diagLine');
+  function resetDiag() { Object.assign(diag, {lastSoundAt: 0, results: 0, lastEvent: 'waiting', lastError: '-', startedAt: Date.now(), warned: false}); }
+  setInterval(() => {
+    const show = listening && audioSourceSel.value !== 'mic';
+    diagLine.hidden = !show;
+    if (!show) return;
+    const quiet = diag.lastSoundAt ? Date.now() - diag.lastSoundAt : Infinity;
+    const hearing = quiet < 3000;
+    diagLine.textContent = 'Check → Share: ' + (displayIsLive() ? 'live' : 'NONE') +
+      ' | Audio track: ' + (activeTrack ? activeTrack.readyState : '-') +
+      ' | Sound: ' + (hearing ? 'hearing audio' : quiet === Infinity ? 'none heard yet' : 'silent for ' + Math.round(quiet / 1000) + 's') +
+      ' | Speech service: ' + diag.lastEvent + (diag.lastError !== '-' ? ' (last error: ' + diag.lastError + ')' : '') +
+      ' | Text results: ' + diag.results;
+    if (!diag.warned && !paused && diag.results === 0 && Date.now() - diag.startedAt > 25000) {
+      diag.warned = true;
+      if (hearing) showToast('⚠️ The app is receiving meeting audio, but the browser\'s speech service is returning no text. This browser build may not recognize shared audio. See the Check line, or use the microphone with speakers / Teams live captions.', 14000);
+      else showToast('🔇 No sound is coming through the shared audio. Check that the meeting is playing on this computer\'s default speakers and that "share audio" was ticked.', 12000);
+    }
+  }, 1000);
 
   function displayIsLive() {
     return !!displayStream && displayStream.getAudioTracks().some(t => t.readyState === 'live');
@@ -1009,10 +1035,12 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
+      diag.lastEvent = 'listening';
       if (listening && !paused && networkErrors === 0) setStatus('Listening...', true);
     };
 
     recognition.onresult = (e) => {
+      diag.results++; diag.lastEvent = 'text received';
       if (networkErrors > 0) { networkErrors = 0; setStatus('Listening...', true); }
       const now = Date.now();
       const gap = now - lastResultTime;
@@ -1035,6 +1063,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
 
     recognition.onerror = (e) => {
       console.warn('Speech recognition error:', e.error);
+      diag.lastError = e.error + (e.message ? ' - ' + e.message : '');
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         listening = false;
         releaseAllAudio();
@@ -1067,6 +1096,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     };
 
     recognition.onend = () => {
+      diag.lastEvent = 'restarting';
       if (listening && !paused) setTimeout(safeStart, networkErrors ? 1000 * networkErrors : 250);
     };
   }
@@ -1142,6 +1172,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     }
     lastResultTime = Date.now();
     networkErrors = 0;
+    resetDiag();
     listening = true; paused = false;
     audioSourceSel.disabled = true;
     pauseBtn.disabled = false; stopBtn.disabled = false;
