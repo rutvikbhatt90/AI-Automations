@@ -278,8 +278,6 @@
   /* Audio source selector */
   .source-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:0.8rem; color:var(--muted); padding:0 16px 8px;}
   .source-row select{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:4px 8px; font-size:0.8rem; max-width:100%;}
-  .source-row .diag{font-family:Consolas,Menlo,monospace; font-size:0.72rem; color:var(--accent); background:var(--bg); border:1px dashed var(--border); border-radius:6px; padding:6px 8px; overflow-wrap:anywhere;}
-  .source-row .diag[hidden]{display:none;}
   .source-row label{white-space:nowrap;}
   .source-row select:disabled{opacity:.6; cursor:not-allowed;}
   .source-row .src-hint{flex:1 1 100%; font-size:0.76rem; line-height:1.45;}
@@ -358,7 +356,7 @@
 <div class="strip"></div>
 
 <div class="setup-banner">
-  🔊 <b>Setup:</b> Join meetings normally, play meeting audio through your <b>speakers</b> so your mic can pick it up &mdash; or wearing headphones? Choose <b>Meeting audio</b> as the audio source below. Keep volume clear, not too loud/quiet. Then hit Start. Your browser asks for microphone access <b>once</b> &mdash; choose <b>Allow</b>.
+  🔊 <b>Setup:</b> Join meetings normally. Either play the meeting through your <b>speakers</b> so your mic can pick it up, or choose <b>Meeting audio + my microphone</b> below to capture the meeting's sound directly. Keep volume clear, not too loud/quiet. Then hit Start. Your browser asks for microphone access <b>once</b> &mdash; choose <b>Allow</b>.
 </div>
 
 <div class="banner" id="browserBanner">⚠️ Live transcription needs Chrome or Edge with microphone access. Typing/notes still work everywhere.</div>
@@ -378,7 +376,6 @@
       <label for="audioSource">🎧 Audio source</label>
       <select id="audioSource" aria-describedby="srcHint">
         <option value="mic">Microphone (play meeting on speakers)</option>
-        <option value="meeting">Meeting audio — works with headphones</option>
         <option value="both">Meeting audio + my microphone</option>
       </select>
       <label for="langSel">Language</label>
@@ -389,7 +386,6 @@
         <option value="fr-CA">Français (Canada)</option>
       </select>
       <span class="src-hint" id="srcHint"></span>
-      <span class="src-hint diag" id="diagLine" hidden></span>
     </div>
     <div class="auto-toggle">
       <input type="checkbox" id="autoSwitch" checked>
@@ -769,12 +765,6 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   let audioCtx = null, analyser = null, micStream = null, micRequest = null, rafId = null;
 
   function setMicPill(state) {
-    if (typeof audioSourceSel !== 'undefined' && audioSourceSel.value === 'meeting') {
-      micPill.classList.toggle('granted', state === 'live');
-      micPill.classList.remove('denied');
-      micPillText.textContent = state === 'live' ? 'Meeting audio: live' : 'Meeting audio: pick a tab';
-      return;
-    }
     micPill.classList.toggle('granted', state === 'granted');
     micPill.classList.toggle('denied', state === 'denied');
     micPillText.textContent =
@@ -845,7 +835,6 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
         if (!analyser) return;
         analyser.getByteFrequencyData(data);
         const avg = data.reduce((a,b)=>a+b,0)/data.length;
-        if (avg > 3) diag.lastSoundAt = Date.now();
         volFill.style.width = Math.min(100, avg*1.6) + '%';
       };
       sample();
@@ -878,7 +867,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
 
   // ============ AUDIO SOURCE: microphone / meeting audio (tab or system) / both ============
   // "Meeting audio" captures the sound the computer is playing (via the browser's share-audio picker)
-  // and hands that audio track straight to speech recognition, so headphones are fine.
+  // and hands that audio track straight to speech recognition.
   const audioSourceSel = document.getElementById('audioSource');
   const srcHint = document.getElementById('srcHint');
   let displayStream = null;     // screen/tab share that carries the meeting audio
@@ -890,13 +879,12 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
 
   const SRC_HINTS = {
-    mic: 'Listens through the microphone, so the meeting must play on speakers (not headphones).',
-    meeting: 'Press Start, then share the meeting\'s browser tab and tick "Also share tab audio" (or Entire screen + "Also share system audio" on Windows). Headphones are fine. Keep this tab visible: put it in its own window next to the meeting (right-click the tab → Move tab to new window), because browsers pause background tabs.',
-    both: 'Captures the meeting\'s sound plus your own voice. Press Start, then share the meeting tab or screen with audio ticked.'
+    mic: 'Listens through the microphone, so the meeting must play on speakers.',
+    both: 'Captures the meeting\'s sound plus your own voice. Press Start, then share your Entire screen (keep "Also share system audio" ticked) or the meeting\'s browser tab (keep "Also share tab audio" ticked).'
   };
   function refreshSrcHint() {
     srcHint.textContent = canCaptureMeeting ? SRC_HINTS[audioSourceSel.value]
-      : 'Meeting audio (headphone-friendly) needs Chrome or Edge 135+ on a computer. On this device, use the microphone and play the meeting on speakers.';
+      : 'Capturing the meeting\'s sound needs Chrome or Edge 135+ on a computer. On this device, use the microphone and play the meeting on speakers.';
   }
   if (!canCaptureMeeting) {
     Array.from(audioSourceSel.options).forEach(o => { if (o.value !== 'mic') { o.disabled = true; o.textContent += ' (computer only)'; } });
@@ -908,42 +896,6 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   });
   refreshSrcHint();
 
-  // ---- Live diagnostics (shown only for the meeting-audio sources) ----
-  const diag = {finals: 0, lastSoundAt: 0, results: 0, lastEvent: '-', lastError: '-', startedAt: 0, warned: false};
-  const diagLine = document.getElementById('diagLine');
-  function resetDiag() { Object.assign(diag, {finals: 0, lastSoundAt: 0, results: 0, lastEvent: 'waiting', lastError: '-', startedAt: Date.now(), warned: false}); }
-  setInterval(() => {
-    const show = listening && audioSourceSel.value !== 'mic';
-    diagLine.hidden = !show;
-    if (!show) return;
-    const quiet = diag.lastSoundAt ? Date.now() - diag.lastSoundAt : Infinity;
-    const hearing = quiet < 3000;
-    diagLine.textContent = 'Check → Share: ' + (displayIsLive() ? 'live' : 'NONE') +
-      ' | Tab: ' + (document.hidden ? 'HIDDEN' : 'visible') +
-      ' | Audio track: ' + (activeTrack ? activeTrack.readyState : '-') +
-      ' | Sound: ' + (hearing ? 'hearing audio' : quiet === Infinity ? 'none heard yet' : 'silent for ' + Math.round(quiet / 1000) + 's') +
-      ' | Speech service: ' + diag.lastEvent + (diag.lastError !== '-' ? ' (last error: ' + diag.lastError + ')' : '') +
-      ' | Words received: ' + diag.results + ' | Lines saved: ' + diag.finals;
-    if (!diag.warned && !paused && diag.finals === 0 && Date.now() - diag.startedAt > 25000) {
-      diag.warned = true;
-      if (diag.lastError.indexOf('network') === 0) showToast('🌐 The browser\'s speech service keeps failing with a network error, so no text is coming back. Try the same thing without the VPN, or on another network (a phone hotspot is a good test).', 14000);
-      else if (hearing) showToast('⚠️ The app is receiving meeting audio, but the browser\'s speech service is returning no text. This browser build may not recognize shared audio. See the Check line, or use the microphone with speakers / Teams live captions.', 14000);
-      else showToast('🔇 No sound is coming through the shared audio. Check that the meeting is playing on this computer\'s default speakers and that "share audio" was ticked.', 12000);
-    }
-  }, 1000);
-
-  // Browsers throttle/suspend background tabs, and the speech connection can drop with them
-  let hiddenAt = 0;
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { hiddenAt = Date.now(); return; }
-    if (listening && !paused && hiddenAt && Date.now() - hiddenAt > 2000) {
-      const secs = Math.round((Date.now() - hiddenAt) / 1000);
-      try { recognition.stop(); } catch (e) {}                 // fresh session (onend saves any pending words and restarts)
-      if (audioSourceSel.value !== 'mic') showToast('⚠️ This tab was in the background for ' + secs + 's, and browsers can pause speech recognition for background tabs. For reliable results, open the transcriber in its own window next to the meeting (right-click the tab → Move tab to new window).', 14000);
-    }
-    hiddenAt = 0;
-  });
-
   function displayIsLive() {
     return !!displayStream && displayStream.getAudioTracks().some(t => t.readyState === 'live');
   }
@@ -953,7 +905,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     const s = await navigator.mediaDevices.getDisplayMedia({
       video: {width: {max: 320}, height: {max: 180}, frameRate: {max: 1}},   // video is required by the API; keep it tiny
       audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false},
-      systemAudio: 'include',
+      systemAudio: 'include',               // ask the browser to offer "Also share system audio" (pre-ticked where supported)
       selfBrowserSurface: 'exclude'
     });
     if (!s.getAudioTracks().length) {
@@ -990,24 +942,19 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
 
   // Opens whatever the chosen source needs (re-using streams that are already open) and sets activeTrack
   async function prepareAudio() {
-    const mode = audioSourceSel.value;
-    if (mode === 'mic') {
+    if (audioSourceSel.value === 'mic') {
       const mic = await ensureMic();
       startMeter([mic], false);
       activeTrack = null;
       return;
     }
+    // 'both': the meeting's sound (screen / tab share) + my microphone, mixed into one track
     let disp;
     try { disp = await ensureDisplay(); } catch (e) { e.step = 'display'; throw e; }
-    if (mode === 'meeting') {
-      startMeter([disp], false);
-      activeTrack = disp.getAudioTracks()[0];
-    } else {
-      const mic = await ensureMic();
-      const mixed = startMeter([disp, mic], true);                      // meeting + me, mixed into one track
-      if (!mixed) throw new Error('Could not combine the audio sources');
-      activeTrack = mixed;
-    }
+    const mic = await ensureMic();
+    const mixed = startMeter([disp, mic], true);
+    if (!mixed) throw new Error('Could not combine the audio sources');
+    activeTrack = mixed;
     setMicPill('live');
   }
 
@@ -1036,7 +983,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   function flushPending() {
     const t = pendingInterim.trim();
     pendingInterim = '';
-    if (t) { addSegment(t, false); updateInterim(''); updateWordCount(); diag.finals++; }
+    if (t) { addSegment(t, false); updateInterim(''); updateWordCount(); }
   }
   setInterval(() => {
     if (listening && !paused && recognition && pendingInterim.trim() && Date.now() - lastInterimAt > 3000) {
@@ -1072,7 +1019,6 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     recognition.lang = (document.getElementById('langSel') || {}).value || 'en-CA';
 
     recognition.onstart = () => {
-      diag.lastEvent = 'listening';
       if (listening && !paused && networkErrors === 0) setStatus('Listening...', true);
     };
 
@@ -1092,8 +1038,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
         if (res.isFinal) finalText += res[0].transcript;
         else interimText += res[0].transcript;
       }
-      if ((finalText + interimText).trim()) { diag.results++; diag.lastEvent = 'text received'; } else { diag.lastEvent = 'empty result (heard nothing)'; }
-      if (finalText.trim()) { addSegment(finalText.trim(), autoAdvanceFlag); autoAdvanceFlag = false; diag.finals++; }
+      if (finalText.trim()) { addSegment(finalText.trim(), autoAdvanceFlag); autoAdvanceFlag = false; }
       pendingInterim = interimText; lastInterimAt = Date.now();
       updateInterim(interimText);
       updateWordCount();
@@ -1101,7 +1046,6 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
 
     recognition.onerror = (e) => {
       console.warn('Speech recognition error:', e.error);
-      diag.lastError = e.error + (e.message ? ' - ' + e.message : '');
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         listening = false;
         releaseAllAudio();
@@ -1134,7 +1078,6 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     };
 
     recognition.onend = () => {
-      diag.lastEvent = 'restarting';
       flushPending();
       if (listening && !paused) setTimeout(safeStart, networkErrors ? 1000 * networkErrors : 250);
     };
@@ -1211,7 +1154,6 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     }
     lastResultTime = Date.now();
     networkErrors = 0;
-    resetDiag();
     listening = true; paused = false;
     audioSourceSel.disabled = true; document.getElementById('langSel').disabled = true;
     pauseBtn.disabled = false; stopBtn.disabled = false;
