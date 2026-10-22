@@ -1644,8 +1644,24 @@ ${aiResultEl.dataset.plainText ? '\n=== AI MEETING NOTES (Matcha) ===\n' + aiRes
       if (err && err.name === 'AbortError') {
         setAIStatus(aiAbort && aiAbort.signal.reason === 'timeout' ? '⌛ Matcha took too long to respond (over 3 minutes). Try again.' : 'Cancelled.', 'err');
       } else {
-        setAIStatus('🌐 Could not reach Matcha. Check that you are online (or on the Harris VPN/network if your key has an IP whitelist). If this keeps happening, the browser may be blocking the cross-origin request (CORS) — see the browser console — and Matcha would need to allow this page’s address.', 'err');
         console.warn('Matcha request failed:', err);
+        setAIStatus('🔎 The request did not go through — checking whether Matcha is reachable from this browser…');
+        // A no-cors request ignores CORS rules: if it succeeds, Matcha is reachable and the browser's CORS check is what blocked the real call.
+        let reachable = false;
+        try {
+          await fetch('https://matcha.harriscomputer.com/', { mode: 'no-cors', cache: 'no-store', signal: (AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined) });
+          reachable = true;
+        } catch (probeErr) {}
+        if (reachable) {
+          const origin = location.origin;
+          setAIStatus('🚧 Matcha is reachable, but your browser blocked this page from calling its API (CORS). ' +
+            (origin === 'null' || location.protocol === 'file:'
+              ? 'This page is open as a local file, so its origin is “null”. Open it from your https site instead (e.g. your GitHub Pages link) and ask the Matcha team to allow that address. '
+              : 'Ask the Matcha team to allow this page’s origin (' + origin + ') to call POST /rest/api/v1/completions, including the request header MATCHA-API-KEY and the preflight (OPTIONS) request. ') +
+            'Until then, use 🚀 Send to Meeting Summarizer.', 'err');
+        } else {
+          setAIStatus('🌐 This browser cannot reach matcha.harriscomputer.com at all. Check that you are online or on the Harris VPN/network, that no extension or proxy is blocking it, and that https://matcha.harriscomputer.com opens in a normal tab.', 'err');
+        }
       }
     } finally {
       clearTimeout(timeout);
