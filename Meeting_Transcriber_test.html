@@ -157,6 +157,10 @@
   .mic-pill.denied{color:var(--hdr-bad); border-color:var(--hdr-bad);}
   .banner .banner-close{float:right; cursor:pointer; margin-left:12px; opacity:.8;}
   .banner .banner-close:hover{opacity:1;}
+  .review-bar{display:none; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 16px; background:var(--warn-bg); color:var(--warn-fg); font-size:0.85rem; border-bottom:1px solid var(--border);}
+  .review-bar.show{display:flex;}
+  .review-bar .review-text{flex:1; min-width:200px;}
+  #transcript.reviewing{outline:2px solid var(--warn-fg); outline-offset:-2px;}
   .keep-open{margin-left:auto; display:flex; align-items:center; gap:6px;}
 
   button{touch-action:manipulation;}
@@ -419,6 +423,11 @@
         <button type="button" class="btn-start fr-btn" id="frReplaceAll">Replace all</button>
         <button type="button" class="btn-secondary fr-btn" id="frClose" title="Close (Esc)" aria-label="Close find and replace">✕</button>
       </div>
+    </div>
+    <div class="review-bar" id="reviewBar" role="status" aria-live="polite">
+      <span class="review-text">✏️ <b>Recording stopped.</b> Make any final edits to the transcript (fix names, wording, delete lines), then generate the summary.</span>
+      <button type="button" class="btn-start" id="reviewSummarizeBtn">🧠 Generate Summary</button>
+      <button type="button" class="btn-secondary" id="reviewSkipBtn">Skip summary</button>
     </div>
     <div id="transcript" contenteditable="true"></div>
     <div class="controls">
@@ -919,20 +928,57 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   }
 
   function handleDisplayLost() {
+    // The shared tab/window went away (e.g. the Teams meeting ended and its window closed).
+    // Treat it exactly like pressing Stop & Summarize so the button never ends up dead/disabled.
     const wasRunning = listening;
-    activeTrack = null;
-    stopMeter();
     if (wasRunning) {
-      listening = false; paused = false;
-      try { recognition.abort(); } catch (e) {}
-      releaseAllAudio();
-      updateInterim('');
-      resetButtons();
-      setStatus('Sharing stopped', false);
-      showToast('🛑 Meeting audio sharing was stopped. Your transcript is kept - press Start to share again.', 7000);
+      finishSession('Meeting ended - sharing stopped', true);
+      showToast('🛑 The shared meeting window closed and recording stopped. Make any final edits, then click Generate Summary.', 9000);
+    } else {
+      activeTrack = null;
+      stopMeter();
+      setMicPill('prompt');
     }
-    setMicPill('prompt');
   }
+
+  // Single, fault-tolerant shutdown path used by the Stop button AND by lost audio sources.
+  // Every step is guarded so one failure can never leave the buttons frozen.
+  function finishSession(statusText, review) {
+    listening = false; paused = false;
+    try { flushPending(); } catch (e) {}
+    try { recognition.abort(); } catch (e) {}      // abort() (not stop()) so nothing waits on a dead audio source
+    try { releaseAllAudio(); } catch (e) { console.warn('releaseAllAudio failed:', e); }
+    try { updateInterim(''); } catch (e) {}
+    try { resetButtons(); } catch (e) {}
+    try { setStatus(statusText || 'Stopped', false); } catch (e) {}
+    try { setMicPill('prompt'); } catch (e) {}
+    if (review) {
+      try { enterReview(); } catch (e) { console.warn('enterReview failed:', e); }
+    }
+  }
+
+  // After Stop: recording is over, the transcript stays editable, and the summary waits
+  // until the user clicks "Generate Summary" so they can make final edits first.
+  const reviewBar = document.getElementById('reviewBar');
+  function enterReview() {
+    const hasText = !!transcriptEl.innerText.trim();
+    if (!hasText) { generateSummary(); return; }          // nothing to edit - show the "no transcript" message
+    reviewBar.classList.add('show');
+    transcriptEl.classList.add('reviewing');
+    setStatus('Review & edit transcript', false);
+    try {
+      transcriptEl.focus();
+      const r = document.createRange(); r.selectNodeContents(transcriptEl); r.collapse(false);
+      const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      transcriptEl.scrollTop = transcriptEl.scrollHeight;
+    } catch (e) {}
+  }
+  function exitReview() {
+    reviewBar.classList.remove('show');
+    transcriptEl.classList.remove('reviewing');
+  }
+  document.getElementById('reviewSummarizeBtn').addEventListener('click', () => generateSummary());
+  document.getElementById('reviewSkipBtn').addEventListener('click', () => { exitReview(); setStatus('Stopped', false); });
 
   function releaseAllAudio() {
     const d = displayStream; displayStream = null; activeTrack = null;
@@ -1054,10 +1100,15 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
         showToast('🚫 Microphone is blocked. Click the 🔒 icon in the address bar → Microphone → Allow, then press Start again.', 8000);
         resetButtons();
       } else if (e.error === 'audio-capture') {
-        listening = false;
-        releaseAllAudio();
-        setStatus(audioSourceSel.value === 'mic' ? 'No microphone found' : 'Audio source lost', false);
-        resetButtons();
+        if (audioSourceSel.value === 'mic') {
+          listening = false;
+          releaseAllAudio();
+          setStatus('No microphone found', false);
+          resetButtons();
+        } else if (listening) {
+          // Meeting audio vanished (window closed) - same clean shutdown + summary as Stop
+          finishSession('Meeting ended - audio source lost', true);
+        }
       } else if (e.error === 'network') {
         networkErrors++;
         if (networkErrors >= 3) {
@@ -1152,6 +1203,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
       startBtn.disabled = false;
       return;
     }
+    exitReview();
     lastResultTime = Date.now();
     networkErrors = 0;
     listening = true; paused = false;
@@ -1189,19 +1241,13 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   });
 
   stopBtn.addEventListener('click', () => {
-    if (!recognition) return;
-    listening = false; paused = false;
-    recognition.stop();
-    releaseAllAudio();                            // mic and shared audio are always released on Stop
-    updateInterim('');
-    resetButtons();
-    setStatus('Stopped', false);
-    generateSummary();
+    finishSession('Stopped', true);
   });
 
   clearBtn.addEventListener('click', () => {
     if (confirm('Clear the entire transcript?')) {
       transcriptEl.innerHTML = '';
+      exitReview();
       updateWordCount();
     }
   });
@@ -1279,8 +1325,30 @@ ${notesEl.value}
   const ACTION_KEYWORDS = ['will ', 'need to', 'action', 'todo', 'to-do', 'follow up', 'follow-up', 'by friday', 'by monday', 'by tuesday', 'by wednesday', 'by thursday', 'by next week', 'due ', 'deadline', 'assign', 'responsible', 'i\'ll ', 'we\'ll ', 'let\'s ', 'should ', 'must '];
   const DECISION_KEYWORDS = ['decided', 'decision', 'agreed', 'we will go with', 'conclusion', 'finalized', 'approved', 'confirmed'];
 
+  // Text of a line as it is on screen now (so manual edits count), without speaker name / timestamp / (auto) tag
+  function segSpokenText(seg) {
+    let t = '';
+    const w = document.createTreeWalker(seg, NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) {
+      if (n.parentElement && n.parentElement.closest('.speaker-name, .ts, .auto-flag')) continue;
+      t += n.nodeValue;
+    }
+    return t.replace(/\s+/g, ' ').trim();
+  }
+
   function generateSummary() {
-    const segs = Array.from(transcriptEl.querySelectorAll('.seg:not(.interim)'));
+    exitReview();
+    let segs = Array.from(transcriptEl.querySelectorAll('.seg:not(.interim)'));
+    segs.forEach(seg => { seg.dataset.text = segSpokenText(seg); });        // pick up final edits
+    segs = segs.filter(seg => seg.dataset.text);                              // lines the user emptied/deleted are skipped
+    // If the user typed text outside any line, still summarize it
+    if (segs.length === 0 && transcriptEl.innerText.trim()) {
+      const d = document.createElement('div');
+      d.className = 'seg'; d.dataset.text = transcriptEl.innerText.replace(/\s+/g, ' ').trim(); d.dataset.speakerId = '';
+      d.innerHTML = '<span class="seg-body"><span class="speaker-name">Transcript</span></span>';
+      segs = [d];
+    }
     if (segs.length === 0) {
       summaryContent.innerHTML = '<p style="color:var(--muted)">No transcript content to summarize.</p>';
       showModal();
