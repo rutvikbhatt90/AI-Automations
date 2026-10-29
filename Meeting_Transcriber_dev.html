@@ -81,7 +81,7 @@
   .dot.live{background:var(--live); opacity:1; box-shadow:0 0 8px var(--live); animation:pulse 1.2s infinite;}
   @keyframes pulse{0%{opacity:1;}50%{opacity:.4;}100%{opacity:1;}}
 
-  .setup-banner{background:var(--info-bg); border-bottom:1px solid var(--info-border); padding:12px 24px; font-size:0.85rem; color:var(--info-fg); display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .setup-banner{background:var(--info-bg); border-bottom:1px solid var(--info-border); padding:7px 24px; font-size:0.8rem; line-height:1.4; color:var(--info-fg); display:block;}
   .setup-banner b{color:var(--info-strong);}
 
   main{flex:1; display:flex; gap:0; padding:16px 24px; overflow:hidden; min-height:0;}
@@ -101,7 +101,7 @@
   .add-speaker{background:transparent; border:1px dashed var(--border); color:var(--muted); border-radius:20px; padding:6px 12px; font-size:0.8rem; cursor:pointer;}
   .add-speaker:hover{color:var(--text); border-color:var(--accent2);}
 
-  .auto-toggle{display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted); padding:0 16px 8px; flex-wrap:wrap;}
+  .auto-toggle{display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted); padding:0 16px 4px; flex-wrap:wrap;}
   .auto-toggle input{accent-color:var(--accent); cursor:pointer;}
   .auto-toggle select{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:2px 6px; font-size:0.78rem;}
 
@@ -139,7 +139,7 @@
   .banner{background:var(--warn-bg); color:var(--warn-fg); padding:10px 24px; font-size:0.85rem; display:none;}
   .hint{font-size:0.72rem; color:var(--muted); padding:0 16px 8px;}
   kbd{background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:1px 5px; font-size:0.7rem;}
-  .vol-meter{height:6px; background:var(--bg); border-radius:4px; overflow:hidden; margin:0 16px 10px; border:1px solid var(--border);}
+  .vol-meter{height:6px; background:var(--bg); border-radius:4px; overflow:hidden; margin:0 16px 6px; border:1px solid var(--border);}
   .vol-fill{height:100%; width:0%; background:linear-gradient(90deg,var(--meter-a),var(--meter-b)); transition:width .08s;}
 
 
@@ -162,6 +162,24 @@
   .review-bar .review-text{flex:1; min-width:200px;}
   #transcript.reviewing{outline:2px solid var(--warn-fg); outline-offset:-2px;}
   .keep-open{margin-left:auto; display:flex; align-items:center; gap:6px;}
+  .keep-open[hidden]{display:none;}
+
+  /* Audio-instructions divider: drag up to hide the Setup banner + hint, drag down to show them */
+  .setup-banner{max-height:260px; overflow:hidden;}
+  .source-row .src-hint{max-height:8em; overflow:hidden;}
+  .setup-banner, .source-row .src-hint{transition:max-height .2s ease, opacity .2s ease, padding .2s ease, border-width .2s ease, margin .2s ease, visibility 0s linear 0s;}
+  body.help-collapsed .setup-banner{max-height:0; padding-top:0; padding-bottom:0; border-bottom-width:0; opacity:0; visibility:hidden; transition-delay:0s,0s,0s,0s,0s,.2s;}
+  body.help-collapsed .source-row .src-hint{max-height:0; margin-top:-4px; opacity:0; visibility:hidden; transition-delay:0s,0s,0s,0s,0s,.2s;}
+  .help-divider{position:relative; display:flex; align-items:center; justify-content:center; gap:8px; min-height:14px; cursor:row-resize; touch-action:none; user-select:none; border-radius:8px; outline:none; margin:0 16px 2px;}
+  .help-divider .grip{width:56px; height:4px; border-radius:2px; background:var(--border); transition:background .15s, width .15s;}
+  .help-divider:hover .grip, .help-divider:focus-visible .grip, .help-divider.dragging .grip{background:var(--accent2); width:80px;}
+  .help-divider:focus-visible{box-shadow:0 0 0 2px var(--accent-ring);}
+  .help-divider .cue{font-size:0.7rem; color:var(--muted); line-height:1;}
+  .help-divider .cue:empty{display:none;}
+  body.resizing-help{cursor:row-resize;}
+  @media (prefers-reduced-motion:reduce){
+    .setup-banner, .source-row .src-hint{transition:none;}
+  }
 
   button{touch-action:manipulation;}
   #transcript{overflow-wrap:anywhere; -webkit-overflow-scrolling:touch;}
@@ -280,11 +298,20 @@
   #choiceModal .modal .choice-note{font-size:0.8rem; color:var(--muted);}
 
   /* Audio source selector */
-  .source-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:0.8rem; color:var(--muted); padding:0 16px 8px;}
+  .source-row{display:flex; align-items:center; gap:4px 8px; flex-wrap:wrap; font-size:0.8rem; color:var(--muted); padding:2px 16px 4px;}
   .source-row select{background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:4px 8px; font-size:0.8rem; max-width:100%;}
   .source-row label{white-space:nowrap;}
+  .source-row select{field-sizing:content;}   /* Chrome 135+: size each dropdown to its selected option (older browsers ignore this) */
   .source-row select:disabled{opacity:.6; cursor:not-allowed;}
-  .source-row .src-hint{flex:1 1 100%; font-size:0.76rem; line-height:1.45;}
+  .source-row .src-hint{flex:1 1 100%; font-size:0.74rem; line-height:1.35;}
+  /* Small laptop windows: squeeze the audio-source block further (all instructions stay visible) */
+  @media (min-width:821px) and (max-height:760px){
+    .setup-banner{padding:4px 16px; font-size:0.76rem; line-height:1.3;}
+    .source-row{padding:0 12px 2px;}
+    .source-row .src-hint{font-size:0.72rem; line-height:1.3;}
+    .auto-toggle{padding:0 12px 2px; font-size:0.76rem;}
+    .vol-meter{margin:0 12px 4px;}
+  }
 
   /* Modals */
   .modal-overlay{position:fixed; inset:0; background:var(--overlay); display:none; align-items:center; justify-content:center; z-index:100;}
@@ -359,7 +386,7 @@
 </header>
 <div class="strip"></div>
 
-<div class="setup-banner">
+<div class="setup-banner" id="setupBanner">
   🔊 <b>Setup:</b> Join meetings normally. Use <b>Meeting audio + my microphone</b> below to capture the meeting's sound directly, or choose <b>Microphone</b> and play the meeting through your <b>speakers</b> so your mic can pick it up. Keep volume clear, not too loud/quiet. Then hit Start. Your browser asks for microphone access <b>once</b> &mdash; choose <b>Allow</b>.
 </div>
 
@@ -389,6 +416,9 @@
         <option value="en-GB">English (UK)</option>
         <option value="fr-CA">Français (Canada)</option>
       </select>
+      <label class="keep-open" id="keepMicOpenLabel" title="Keeps the mic connection open while paused so the browser doesn't need to ask again. Turn off if you want the mic fully released on Pause.">
+        <input type="checkbox" id="keepMicOpen" checked> Keep mic open while paused
+      </label>
       <span class="src-hint" id="srcHint"></span>
     </div>
     <div class="auto-toggle">
@@ -401,11 +431,14 @@
         <option value="3000">3.0s</option>
       </select>
       <span style="color:var(--muted)">— heuristic guess, not true voice ID. Override anytime with chips/keys 1-9.</span>
-      <label class="keep-open" title="Keeps the mic connection open while paused so the browser doesn't need to ask again. Turn off if you want the mic fully released on Pause.">
-        <input type="checkbox" id="keepMicOpen" checked> Keep mic open while paused
-      </label>
     </div>
     <div class="vol-meter"><div class="vol-fill" id="volFill"></div></div>
+    <div class="help-divider" id="helpDivider" role="separator" aria-orientation="horizontal"
+         aria-controls="setupBanner srcHint" aria-valuemin="0" aria-valuemax="1" aria-valuenow="1" tabindex="0"
+         aria-label="Audio instructions divider. Drag up to hide the instructions, drag down to show them."
+         title="Drag up to hide the audio instructions, drag down (or click) to show them again">
+      <span class="grip"></span><span class="cue" id="helpCue"></span>
+    </div>
     <div class="fr-bar" id="frBar" hidden role="search" aria-label="Find and replace in transcript">
       <div class="fr-row">
         <input type="text" id="frFind" placeholder="Find word or name…" aria-label="Find" autocomplete="off" spellcheck="false">
@@ -897,6 +930,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     both: 'Captures the meeting\'s sound plus your own voice. Press Start, then share your Entire screen (keep "Also share system audio" ticked) or the meeting\'s browser tab (keep "Also share tab audio" ticked).'
   };
   function refreshSrcHint() {
+    document.getElementById('keepMicOpenLabel').hidden = audioSourceSel.value !== 'mic';   // only applies to microphone-only mode
     srcHint.textContent = canCaptureMeeting ? SRC_HINTS[audioSourceSel.value]
       : 'Capturing the meeting\'s sound needs Chrome or Edge 135+ on a computer. On this device, use the microphone and play the meeting on speakers.';
   }
@@ -1673,6 +1707,48 @@ ${notesEl.value}
     findIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); step(e.shiftKey ? -1 : 1); } });
     replIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); replaceOne(); } });
     bar.addEventListener('keydown', e => { if (e.key === 'Escape' && !choiceResolve) { e.preventDefault(); closeBar(); } });
+  })();
+
+  // ============ AUDIO INSTRUCTIONS DIVIDER (drag up = hide the instructions, drag down = show) ============
+  (function initHelpDivider(){
+    const handle = document.getElementById('helpDivider');
+    const cue = document.getElementById('helpCue');
+    const THRESHOLD = 18;                              // px of drag needed to flip
+    const isCollapsed = () => document.body.classList.contains('help-collapsed');
+    function setCollapsed(c) {
+      document.body.classList.toggle('help-collapsed', c);
+      handle.setAttribute('aria-valuenow', c ? '0' : '1');
+      cue.textContent = c ? 'Instructions hidden \u2013 drag down or click to show' : '';
+    }
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      e.preventDefault();
+      try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+      let startY = e.clientY, moved = false;
+      handle.classList.add('dragging'); document.body.classList.add('resizing-help');
+      const move = (ev) => {
+        const dy = ev.clientY - startY;
+        if (Math.abs(dy) > 4) moved = true;
+        if (!isCollapsed() && dy < -THRESHOLD) { setCollapsed(true);  startY = ev.clientY; }   // re-base so reversing needs a fresh drag
+        else if (isCollapsed() && dy > THRESHOLD) { setCollapsed(false); startY = ev.clientY; }
+      };
+      const up = (ev) => {
+        try { handle.releasePointerCapture(ev.pointerId); } catch (err) {}
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', up);
+        handle.removeEventListener('pointercancel', up);
+        handle.classList.remove('dragging'); document.body.classList.remove('resizing-help');
+        if (!moved && ev.type === 'pointerup') setCollapsed(!isCollapsed());      // a plain click toggles
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', up);
+      handle.addEventListener('pointercancel', up);
+    });
+    handle.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp')   { e.preventDefault(); setCollapsed(true); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); setCollapsed(false); }
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(!isCollapsed()); }
+    });
   })();
 
   // ============ RESIZABLE TRANSCRIPT / NOTES PANELS ============
