@@ -157,26 +157,6 @@
   .mic-pill.denied{color:var(--hdr-bad); border-color:var(--hdr-bad);}
   .banner .banner-close{float:right; cursor:pointer; margin-left:12px; opacity:.8;}
   .banner .banner-close:hover{opacity:1;}
-  .ai-panel{border:1px solid var(--accent2); border-radius:10px; padding:12px 14px; margin:8px 0 14px; background:var(--bg);}
-  .ai-panel h3{margin:0 0 6px;}
-  .ai-note{font-size:0.78rem; color:var(--muted); margin:0 0 10px; line-height:1.5;}
-  .ai-row{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
-  .ai-row input[type=password]{flex:1 1 220px; min-width:0; background:var(--panel); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:8px 10px; font-size:0.85rem; outline:none; font-family:monospace;}
-  .ai-row input[type=password]:focus{border-color:var(--accent); box-shadow:0 0 0 2px var(--accent-ring);}
-  .ai-status{font-size:0.8rem; margin-top:8px; color:var(--muted); line-height:1.5;}
-  .ai-status.err{color:var(--danger);}
-  .ai-status.ok{color:var(--accent);}
-  .ai-result{margin-top:10px; font-size:0.9rem; line-height:1.6; overflow-wrap:anywhere;}
-  .ai-result:empty{display:none;}
-  .ai-result h3, .ai-result h4{color:var(--accent2); margin:16px 0 6px;}
-  .ai-result ul, .ai-result ol{padding-left:22px; margin:6px 0;}
-  .ai-result blockquote{margin:8px 0; padding:4px 12px; border-left:3px solid var(--border); color:var(--muted);}
-  .ai-result table{border-collapse:collapse; width:100%; font-size:0.82rem; display:block; overflow-x:auto;}
-  .ai-result th, .ai-result td{border:1px solid var(--border); padding:4px 8px; text-align:left; vertical-align:top;}
-  .ai-result code{background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:0 4px; font-size:0.85em;}
-  .ai-result hr{border:none; border-top:1px solid var(--border); margin:12px 0;}
-  .ai-result a{color:var(--accent);}
-  .ai-actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
   .review-bar{display:none; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 16px; background:var(--warn-bg); color:var(--warn-fg); font-size:0.85rem; border-bottom:1px solid var(--border);}
   .review-bar.show{display:flex;}
   .review-bar .review-text{flex:1; min-width:200px;}
@@ -351,7 +331,6 @@
       <li>This is an <b>internal, unofficial productivity aid</b> — it is not a sanctioned system of record and must <b>not be shared externally</b> or used as evidence in any formal, legal, HR, or compliance context.</li>
       <li>All transcript and notes data is cleared automatically when you refresh or close this page — nothing persists between sessions.</li>
       <li>The "Send to Meeting Summarizer" button opens a MatchaOS mission in a new tab and copies your <b>transcript only</b> (not your notes) to your clipboard for you to paste in manually — it does not transmit data automatically.</li>
-      <li>The optional <b>✨ Generate AI Notes</b> button sends your edited <b>transcript</b> to Matcha over the internet using an API key you paste in (kept in memory only, never saved). Use it only for meetings whose content Matcha is approved to handle.</li>
       <li>Ensure all meeting participants are aware that notes are being taken, per your organization's meeting and recording policies.</li>
     </ul>
     <div class="disclaimer-check">
@@ -381,7 +360,7 @@
 <div class="strip"></div>
 
 <div class="setup-banner">
-  🔊 <b>Setup:</b> Join meetings normally. Either play the meeting through your <b>speakers</b> so your mic can pick it up, or choose <b>Meeting audio + my microphone</b> below to capture the meeting's sound directly. Keep volume clear, not too loud/quiet. Then hit Start. Your browser asks for microphone access <b>once</b> &mdash; choose <b>Allow</b>.
+  🔊 <b>Setup:</b> Join meetings normally. Use <b>Meeting audio + my microphone</b> below to capture the meeting's sound directly, or choose <b>Microphone</b> and play the meeting through your <b>speakers</b> so your mic can pick it up. Keep volume clear, not too loud/quiet. Then hit Start. Your browser asks for microphone access <b>once</b> &mdash; choose <b>Allow</b>.
 </div>
 
 <div class="banner" id="browserBanner">⚠️ Live transcription needs Chrome or Edge with microphone access. Typing/notes still work everywhere.</div>
@@ -400,8 +379,8 @@
     <div class="source-row">
       <label for="audioSource">🎧 Audio source</label>
       <select id="audioSource" aria-describedby="srcHint">
+        <option value="both" selected>Meeting audio + my microphone</option>
         <option value="mic">Microphone (play meeting on speakers)</option>
-        <option value="both">Meeting audio + my microphone</option>
       </select>
       <label for="langSel">Language</label>
       <select id="langSel" aria-label="Spoken language">
@@ -481,28 +460,13 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   </div>
 </main>
 
-<footer>Runs in your browser — no audio is stored and nothing persists after refresh/close. Your transcript only leaves this page if you choose ✨ Generate AI Notes (sent to Matcha) or 🚀 Send to Meeting Summarizer (copied to your clipboard). Speaker auto-switching is pause-based (not true voice ID). The quick summary is keyword-based; AI notes come from Matcha and should be reviewed. Internal use only — do not use for external distribution or as an official record.</footer>
+<footer>Runs 100% locally in your browser — no audio is stored, no data leaves your machine, and nothing persists after refresh/close. Speaker auto-switching is pause-based (not true voice ID). Summary is keyword-based, not AI-generated. Internal use only — do not use for external distribution or as an official record.</footer>
 
 <!-- Summary Modal -->
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <span class="close-modal" id="closeModal">✕</span>
     <h2>📋 Meeting Summary</h2>
-    <div class="ai-panel" id="aiPanel">
-      <h3>✨ AI Meeting Notes (Matcha)</h3>
-      <p class="ai-note">Sends your <b>edited transcript</b> to the Matcha “Summary-Style Meeting Notes” mission and shows the notes it returns. Your API key stays in this page’s memory only (never saved or exported) and must be pasted again after a refresh. Only use this for meetings whose content Matcha is approved to handle.</p>
-      <div class="ai-row">
-        <input type="password" id="matchaKey" placeholder="Matcha API key (mk_live_…)" autocomplete="new-password" spellcheck="false" aria-label="Matcha API key">
-        <button type="button" class="btn-bridge" id="aiGenBtn">✨ Generate AI Notes</button>
-        <button type="button" class="btn-secondary" id="aiCancelBtn" hidden>Cancel</button>
-      </div>
-      <div class="ai-status" id="aiStatus" role="status" aria-live="polite"></div>
-      <div class="ai-result" id="aiResult"></div>
-      <div class="ai-actions" id="aiActions" hidden>
-        <button type="button" class="btn-secondary" id="aiCopyBtn">📋 Copy AI Notes</button>
-      </div>
-    </div>
-    <h3>🧮 Quick local summary (keyword-based)</h3>
     <div id="summaryContent"></div>
     <div style="margin-top:20px; display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn-secondary" id="insertToNotes">📥 Insert into Notes</button>
@@ -762,8 +726,11 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     addBtn.className = 'add-speaker';
     addBtn.textContent = '+ Add speaker';
     addBtn.addEventListener('click', () => {
-      const color = COLORS[speakers.length % COLORS.length];
-      const sp = {id: nextId++, name: 'Speaker ' + (speakers.length+1), color};
+      const usedColors = speakers.map(x => x.color);
+      const color = COLORS.find(c => !usedColors.includes(c)) || COLORS[speakers.length % COLORS.length];
+      let num = speakers.length + 1;
+      while (speakers.some(x => x.name === 'Speaker ' + num)) num++;
+      const sp = {id: nextId++, name: 'Speaker ' + num, color};
       speakers.push(sp);
       activeSpeakerId = sp.id;
       renderSpeakerBar();
@@ -775,7 +742,9 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   function escapeAttr(str){ return str.replace(/"/g,'&quot;'); }
 
   document.addEventListener('keydown', (e) => {
-    if (choiceResolve || document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.id === 'transcript') return;
+    if (choiceResolve || document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.tagName === 'SELECT' || document.activeElement.id === 'transcript') return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;                                  // leave browser shortcuts (Ctrl+1 ...) alone
+    if (modalOverlay.classList.contains('show') || disclaimerModal.classList.contains('show')) return;
     const n = parseInt(e.key, 10);
     if (n && speakers[n-1]) {
       activeSpeakerId = speakers[n-1].id;
@@ -1065,7 +1034,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   function flushPending() {
     const t = pendingInterim.trim();
     pendingInterim = '';
-    if (t) { addSegment(t, false); updateInterim(''); updateWordCount(); }
+    if (t) { addSegment(t, autoAdvanceFlag); autoAdvanceFlag = false; updateInterim(''); updateWordCount(); }
   }
   setInterval(() => {
     if (listening && !paused && recognition && pendingInterim.trim() && Date.now() - lastInterimAt > 3000) {
@@ -1212,7 +1181,10 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   }
 
   function updateWordCount() {
-    const words = transcriptEl.innerText.trim().split(/\s+/).filter(Boolean).length;
+    const segs = Array.from(transcriptEl.querySelectorAll('.seg:not(.interim)'));
+    const words = segs.length
+      ? segs.reduce((n, seg) => n + segSpokenText(seg).split(/\s+/).filter(Boolean).length, 0)
+      : transcriptEl.innerText.trim().split(/\s+/).filter(Boolean).length;   // text typed outside any line
     wordCount.textContent = words + ' words';
   }
 
@@ -1236,6 +1208,10 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
       await prepareAudio();                      // mic: the ONE permission request; meeting: the share picker
     } catch (err) {
       explainAudioError(err);
+      if (err && err.step !== 'display' && displayStream) {      // share succeeded but the mic didn't: don't leave sharing on
+        displayStream.getTracks().forEach(t => t.stop());
+        displayStream = null;
+      }
       startBtn.disabled = false;
       return;
     }
@@ -1263,10 +1239,12 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
       try {
         await prepareAudio();                    // no prompt if the stream was kept open
       } catch (err) {
+        if (!listening) return;                  // Stop was pressed while waiting: leave the "Stopped" state alone
         explainAudioError(err);
         pauseBtn.disabled = false;
         return;
       }
+      if (!listening) { releaseAllAudio(); return; }   // Stop won the race: don't leave the mic / share open
       pauseBtn.disabled = false;
       paused = false;
       lastResultTime = Date.now();
@@ -1283,8 +1261,8 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
   clearBtn.addEventListener('click', () => {
     if (confirm('Clear the entire transcript?')) {
       transcriptEl.innerHTML = '';
+      pendingInterim = ''; interimSpan = null; autoAdvanceFlag = false;   // otherwise old grey text can reappear
       exitReview();
-      resetAINotes();
       updateWordCount();
     }
   });
@@ -1294,7 +1272,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     navigator.clipboard.writeText(text).then(() => {
       copyBtn.textContent = '✅ Copied!';
       setTimeout(() => copyBtn.textContent = '📋 Copy', 1500);
-    });
+    }, () => showToast('⚠️ Could not copy automatically. Select the transcript and copy it manually.'));
   });
 
   function download(filename, text) {
@@ -1303,7 +1281,7 @@ Note: this content is NOT saved between sessions. Export before closing!"></text
     const a = document.createElement('a');
     a.href = url; a.download = filename;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
   }
 
   exportBtn.addEventListener('click', () => {
@@ -1323,7 +1301,7 @@ ${transcriptEl.innerText}
 
 === NOTES & ACTION ITEMS ===
 ${notesEl.value}
-${aiResultEl.dataset.plainText ? '\n=== AI MEETING NOTES (Matcha) ===\n' + aiResultEl.dataset.plainText + '\n' : ''}`;
+`;
     download(sanitizeFilename(title) + '_full-report.txt', report);
   });
 
@@ -1456,7 +1434,6 @@ ${aiResultEl.dataset.plainText ? '\n=== AI MEETING NOTES (Matcha) ===\n' + aiRes
 
     summaryContent.innerHTML = html;
     summaryContent.dataset.plainText = buildPlainSummary(talkRanking, totalWords, keyPoints, actionItems, decisions);
-    updateAIStale();
     showModal();
   }
 
@@ -1475,222 +1452,6 @@ ${aiResultEl.dataset.plainText ? '\n=== AI MEETING NOTES (Matcha) ===\n' + aiRes
     return out;
   }
 
-
-  // ============ AI MEETING NOTES via Matcha Mission (REST completions API) ============
-  const MATCHA_API_URL = 'https://matcha.harriscomputer.com/rest/api/v1/completions';
-  const MATCHA_MISSION_ID = 4010;                    // "Summary-Style Meeting Notes"
-  const aiKeyEl = document.getElementById('matchaKey');
-  const aiGenBtn = document.getElementById('aiGenBtn');
-  const aiCancelBtn = document.getElementById('aiCancelBtn');
-  const aiStatusEl = document.getElementById('aiStatus');
-  const aiResultEl = document.getElementById('aiResult');
-  const aiActionsEl = document.getElementById('aiActions');
-  let aiAbort = null;
-  let aiSnapshot = '';                               // transcript the current AI notes were generated from
-
-  function setAIStatus(msg, kind) {
-    aiStatusEl.textContent = msg || '';
-    aiStatusEl.className = 'ai-status' + (kind ? ' ' + kind : '');
-  }
-
-  // Transcript as "Speaker: text" lines, built from what is on screen now (includes final edits)
-  function buildTranscriptForAI() {
-    const segs = Array.from(transcriptEl.querySelectorAll('.seg:not(.interim)'));
-    const lines = [];
-    segs.forEach(seg => {
-      const text = segSpokenText(seg);
-      if (!text) return;
-      const labelEl = seg.querySelector('.speaker-name');
-      const sp = speakers.find(x => x.id == seg.dataset.speakerId);
-      const name = (labelEl && labelEl.textContent.trim()) || (sp ? sp.name : 'Speaker');
-      lines.push(name + ': ' + text);
-    });
-    if (lines.length) return lines.join('\n');
-    return transcriptEl.innerText.replace(/\s+\n/g, '\n').trim();   // text typed outside any line
-  }
-
-  // ---- tiny, safe Markdown renderer (everything is HTML-escaped first) ----
-  function mdEsc(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-  }
-  function mdInline(raw) {
-    let t = mdEsc(raw);
-    t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
-    t = t.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-    t = t.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<i>$2</i>');
-    t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-    return t;
-  }
-  function mdToHtml(md) {
-    md = String(md).replace(/\r\n?/g, '\n').replace(/!\[[^\]]*\]\([^)]*\)/g, '');   // drop images
-    const lines = md.split('\n');
-    const out = [];
-    let i = 0;
-    const listStack = [];                            // [{type:'ul'|'ol', indent}]
-    const closeLists = (toIndent) => {
-      while (listStack.length && (toIndent === undefined || listStack[listStack.length - 1].indent > toIndent)) {
-        out.push('</' + listStack.pop().type + '>');
-      }
-    };
-    const splitRow = (row) => row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-    while (i < lines.length) {
-      const line = lines[i];
-      if (!line.trim()) { closeLists(); i++; continue; }
-
-      // table: header row + separator row
-      if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1])) {
-        closeLists();
-        const head = splitRow(line);
-        i += 2;
-        let html = '<table><thead><tr>' + head.map(c => '<th>' + mdInline(c) + '</th>').join('') + '</tr></thead><tbody>';
-        while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
-          html += '<tr>' + splitRow(lines[i]).map(c => '<td>' + mdInline(c) + '</td>').join('') + '</tr>';
-          i++;
-        }
-        out.push(html + '</tbody></table>');
-        continue;
-      }
-
-      let m;
-      if ((m = line.match(/^\s*(#{1,6})\s+(.*)$/))) {
-        closeLists();
-        const level = m[1].length <= 2 ? 3 : 4;
-        out.push('<h' + level + '>' + mdInline(m[2].replace(/\s*#+\s*$/, '')) + '</h' + level + '>');
-        i++; continue;
-      }
-      if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)) { closeLists(); out.push('<hr>'); i++; continue; }
-      if (/^\s*>/.test(line)) {
-        closeLists();
-        const q = [];
-        while (i < lines.length && /^\s*>/.test(lines[i])) { q.push(lines[i].replace(/^\s*>\s?/, '')); i++; }
-        out.push('<blockquote>' + q.map(mdInline).join('<br>') + '</blockquote>');
-        continue;
-      }
-      if ((m = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/))) {
-        const indent = m[1].replace(/\t/g, '    ').length;
-        const type = /\d/.test(m[2]) ? 'ol' : 'ul';
-        closeLists(indent);
-        const top = listStack[listStack.length - 1];
-        if (!top || top.indent < indent) { listStack.push({ type, indent }); out.push('<' + type + '>'); }
-        else if (top.type !== type) { out.push('</' + listStack.pop().type + '>'); listStack.push({ type, indent }); out.push('<' + type + '>'); }
-        let item = m[3].replace(/^\[( |x|X)\]\s+/, (_, c) => (c === ' ' ? '☐ ' : '☑ '));
-        out.push('<li>' + mdInline(item) + '</li>');
-        i++; continue;
-      }
-      // paragraph: gather following plain lines
-      closeLists();
-      const para = [line.trim()];
-      i++;
-      while (i < lines.length && lines[i].trim() && !/^\s*(#{1,6}\s|>|[-*+]\s|\d+[.)]\s|\|)/.test(lines[i]) && !/^\s*([-*_])(\s*\1){2,}\s*$/.test(lines[i])) {
-        para.push(lines[i].trim()); i++;
-      }
-      out.push('<p>' + para.map(mdInline).join('<br>') + '</p>');
-    }
-    closeLists();
-    return out.join('\n');
-  }
-
-  function aiErrorMessage(status, bodyMsg, retryAfter) {
-    if (status === 401) return '🔑 Matcha rejected the request (401). ' + (bodyMsg || 'Check the API key, or that your IP is allowed for it.');
-    if (status === 403) return '🚫 Matcha refused access (403). ' + (bodyMsg || 'This key may not be able to use mission 4010.');
-    if (status === 404) return '❓ Matcha could not find mission 4010 for this key (404). Check the key’s workspace access.';
-    if (status === 413) return '📄 The transcript is too large for Matcha to accept in one request (413).';
-    if (status === 429) return '⏳ Matcha rate limit reached' + (retryAfter ? ' — try again in about ' + retryAfter + ' seconds.' : '.') + (bodyMsg ? ' ' + bodyMsg : '');
-    return '⚠️ Matcha returned an error (' + status + '). ' + (bodyMsg || '');
-  }
-
-  async function generateAINotes() {
-    const key = aiKeyEl.value.trim();
-    if (!key) { setAIStatus('Paste your Matcha API key first.', 'err'); aiKeyEl.focus(); return; }
-    if (/\s/.test(key)) { setAIStatus('The API key should not contain spaces — re-copy it from Matcha.', 'err'); return; }
-    const transcript = buildTranscriptForAI();
-    if (!transcript) { setAIStatus('There is no transcript to summarize yet.', 'err'); return; }
-
-    const title = meetingTitle.value.trim();
-    const context = 'This is a meeting transcript' + (title ? ' for the meeting titled "' + title + '"' : '') +
-      '. Meeting date: ' + new Date().toLocaleDateString() + '. Speaker labels are approximate. The text may contain speech-recognition errors.';
-
-    aiAbort = new AbortController();
-    const timeout = setTimeout(() => aiAbort && aiAbort.abort('timeout'), 180000);
-    aiGenBtn.disabled = true; aiCancelBtn.hidden = false;
-    setAIStatus('⏳ Sending transcript to Matcha and generating notes… this can take up to a minute or two.');
-
-    try {
-      const res = await fetch(MATCHA_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'MATCHA-API-KEY': key },
-        body: JSON.stringify({ mission_id: MATCHA_MISSION_ID, input: transcript, context: context, stream: false }),
-        signal: aiAbort.signal
-      });
-      let data = null;
-      try { data = await res.json(); } catch (e) {}
-      if (!res.ok || (data && data.status === 'error')) {
-        const bodyMsg = data && (typeof data.error === 'string' ? data.error : (data.error && data.error.message)) || '';
-        setAIStatus(aiErrorMessage(res.status, bodyMsg, res.headers.get('Retry-After')), 'err');
-        return;
-      }
-      const parts = [];
-      ((data && data.output) || []).forEach(o => (o.content || []).forEach(c => { if (c.type === 'output_text' && c.text) parts.push(c.text); }));
-      const text = parts.join('\n\n').replace(/!\[[^\]]*\]\([^)]*\)/g, '').trim();
-      if (!text) { setAIStatus('⚠️ Matcha replied but returned no notes. Try again, or use 🚀 Send to Meeting Summarizer.', 'err'); return; }
-
-      aiResultEl.innerHTML = mdToHtml(text);
-      aiResultEl.dataset.plainText = text;
-      aiActionsEl.hidden = false;
-      aiSnapshot = transcript;
-      setAIStatus('✅ AI notes generated by Matcha at ' + new Date().toLocaleTimeString() + '. AI-generated — review before sharing.', 'ok');
-      aiResultEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    } catch (err) {
-      if (err && err.name === 'AbortError') {
-        setAIStatus(aiAbort && aiAbort.signal.reason === 'timeout' ? '⌛ Matcha took too long to respond (over 3 minutes). Try again.' : 'Cancelled.', 'err');
-      } else {
-        console.warn('Matcha request failed:', err);
-        setAIStatus('🔎 The request did not go through — checking whether Matcha is reachable from this browser…');
-        // A no-cors request ignores CORS rules: if it succeeds, Matcha is reachable and the browser's CORS check is what blocked the real call.
-        let reachable = false;
-        try {
-          await fetch('https://matcha.harriscomputer.com/', { mode: 'no-cors', cache: 'no-store', signal: (AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined) });
-          reachable = true;
-        } catch (probeErr) {}
-        if (reachable) {
-          const origin = location.origin;
-          setAIStatus('🚧 Matcha is reachable, but your browser blocked this page from calling its API (CORS). ' +
-            (origin === 'null' || location.protocol === 'file:'
-              ? 'This page is open as a local file, so its origin is “null”. Open it from your https site instead (e.g. your GitHub Pages link) and ask the Matcha team to allow that address. '
-              : 'Ask the Matcha team to allow this page’s origin (' + origin + ') to call POST /rest/api/v1/completions, including the request header MATCHA-API-KEY and the preflight (OPTIONS) request. ') +
-            'Until then, use 🚀 Send to Meeting Summarizer.', 'err');
-        } else {
-          setAIStatus('🌐 This browser cannot reach matcha.harriscomputer.com at all. Check that you are online or on the Harris VPN/network, that no extension or proxy is blocking it, and that https://matcha.harriscomputer.com opens in a normal tab.', 'err');
-        }
-      }
-    } finally {
-      clearTimeout(timeout);
-      aiAbort = null;
-      aiGenBtn.disabled = false; aiCancelBtn.hidden = true;
-    }
-  }
-
-  function resetAINotes() {
-    aiResultEl.innerHTML = ''; aiResultEl.dataset.plainText = '';
-    aiActionsEl.hidden = true; aiSnapshot = ''; setAIStatus('');
-  }
-  // When the summary window opens again after the transcript was edited, say so
-  function updateAIStale() {
-    if (!aiResultEl.dataset.plainText) return;
-    if (buildTranscriptForAI() !== aiSnapshot) {
-      setAIStatus('⚠️ The transcript has changed since these AI notes were generated — click Generate AI Notes again to refresh them.', 'err');
-    }
-  }
-
-  aiGenBtn.addEventListener('click', generateAINotes);
-  aiCancelBtn.addEventListener('click', () => { if (aiAbort) aiAbort.abort('user'); });
-  aiKeyEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); generateAINotes(); } });
-  document.getElementById('aiCopyBtn').addEventListener('click', () => {
-    const t = aiResultEl.dataset.plainText || '';
-    if (!t) return;
-    navigator.clipboard.writeText(t).then(() => showToast('✅ AI notes copied to clipboard.'), () => showToast('⚠️ Could not copy automatically.'));
-  });
-
   function showModal(){ modalOverlay.classList.add('show'); }
   function hideModal(){ modalOverlay.classList.remove('show'); }
   document.getElementById('closeModal').addEventListener('click', hideModal);
@@ -1698,7 +1459,7 @@ ${aiResultEl.dataset.plainText ? '\n=== AI MEETING NOTES (Matcha) ===\n' + aiRes
   modalOverlay.addEventListener('click', (e) => { if (e.target === modalOverlay) hideModal(); });
 
   document.getElementById('insertToNotes').addEventListener('click', () => {
-    const plain = aiResultEl.dataset.plainText || summaryContent.dataset.plainText || '';
+    const plain = summaryContent.dataset.plainText || '';
     notesEl.value = (notesEl.value ? notesEl.value + '\n\n' : '') + plain;
     hideModal();
   });
